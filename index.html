@@ -21,7 +21,58 @@
 </head>
 
 <body>
-    <div id="app">
+    <div id="authContainer">
+        <div class="auth-screen active" id="loginScreen">
+            <div class="auth-box">
+                <div class="auth-header">
+                    <div class="auth-logo">👶</div>
+                    <h1>Welcome Back</h1>
+                    <p>Track your baby's journey</p>
+                </div>
+                <form id="loginForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" placeholder="mom@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="primary-btn auth-btn">Log In</button>
+                    <div class="auth-footer">
+                        <p>Don't have an account? <span class="link" id="showSignup">Sign Up</span></p>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="auth-screen" id="signupScreen">
+            <div class="auth-box">
+                <div class="auth-header">
+                    <div class="auth-logo">✨</div>
+                    <h1>Create Account</h1>
+                    <p>Start tracking today</p>
+                </div>
+                <form id="signupForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <input type="email" id="signupEmail" placeholder="dad@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="primary-btn auth-btn">Sign Up</button>
+                    <div class="auth-footer">
+                        <p>Already have an account? <span class="link" id="showLogin">Log In</span></p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="app" class="hidden">
+
         <!-- Navigation -->
         <nav class="bottom-nav" id="bottomNav">
             <button class="nav-item active" data-screen="home">
@@ -235,6 +286,12 @@
                             <option value="oz">Ounces (oz)</option>
                         </select>
                     </div>
+                </section>
+
+                <section class="settings-section">
+                    <h2 class="settings-title">Account</h2>
+                    <p class="user-email-display" id="userEmailDisplay"></p>
+                    <button class="secondary-btn" id="logoutBtn">Log Out</button>
                 </section>
 
                 <section class="settings-section">

@@ -10,6 +10,13 @@ import {
     query,
     orderBy
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signInWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
 // ===== Baby Progress Tracker - Firebase Edition =====
 
@@ -26,6 +33,7 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 // Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {
@@ -47,6 +55,7 @@ const COLLECTIONS = {
 // ===== State =====
 // We keep a local copy of data synced from Firestore
 const state = {
+    user: null,
     baby: null,
     settings: { volumeUnit: 'ml' },
     feedings: [],
@@ -59,11 +68,20 @@ const state = {
 };
 
 // ===== Database Helpers (Firebase Wrappers) =====
+function getUserRef(collectionName, docId) {
+    if (!state.user) throw new Error("User not authenticated");
+    // Path: users/{userId}/{collectionName}/{docId}
+    return doc(db, 'users', state.user.uid, collectionName, docId);
+}
 
 // Add or Update a document
 async function saveDoc(collectionName, data) {
     try {
-        await setDoc(doc(db, collectionName, data.id), data);
+        if (!state.user) {
+            showToast("Please log in first");
+            return;
+        }
+        await setDoc(getUserRef(collectionName, data.id), data);
         return data; // Success
     } catch (e) {
         console.error("Error adding document: ", e);
@@ -75,7 +93,8 @@ async function saveDoc(collectionName, data) {
 // Delete a document
 async function removeDoc(collectionName, id) {
     try {
-        await deleteDoc(doc(db, collectionName, id));
+        if (!state.user) return;
+        await deleteDoc(getUserRef(collectionName, id));
     } catch (e) {
         console.error("Error removing document: ", e);
         showToast("Error deleting.");
@@ -84,12 +103,12 @@ async function removeDoc(collectionName, id) {
 }
 
 // Clear all data (for Settings -> Clear Data)
-// Note: Firestore doesn't have a simple "clear collection" client-side for safety.
-// We'll just batch delete in a loop for this simple app.
 async function clearCollection(collectionName) {
+    if (!state.user) return;
+
     // In a real app, do this via a Cloud Function. For MVP, we iterate local state.
     const items = collectionName === COLLECTIONS.feedings ? state.feedings : state.sleeps;
-    const promises = items.map(item => deleteDoc(doc(db, collectionName, item.id)));
+    const promises = items.map(item => deleteDoc(getUserRef(collectionName, item.id)));
     await Promise.all(promises);
 }
 
@@ -194,12 +213,36 @@ function showToast(message) {
 }
 
 // ===== Real-time Listeners =====
+// ===== Real-time Listeners =====
+let unsubBaby, unsubSettings, unsubFeedings, unsubSleeps;
+
 function initListeners() {
-    console.log("Initializing Firestore listeners...");
+    // Clean up existing listeners if any
+    if (unsubBaby) unsubBaby();
+    if (unsubSettings) unsubSettings();
+    if (unsubFeedings) unsubFeedings();
+    if (unsubSleeps) unsubSleeps();
+
+    if (!state.user) {
+        console.log("No user, clearing data...");
+        state.baby = null;
+        state.settings = { volumeUnit: 'ml' };
+        state.feedings = [];
+        state.sleeps = [];
+        updateDashboard();
+        renderFeedingLog();
+        renderSleepLog();
+        updateBabyUI();
+        updateSettingsUI();
+        return;
+    }
+
+    console.log("Initializing Firestore listeners for user:", state.user.uid);
+    const userId = state.user.uid;
 
     // Baby Info Listener
-    // We specifically listen to 'main' document
-    onSnapshot(doc(db, COLLECTIONS.baby, 'main'), (doc) => {
+    // Path: users/{uid}/baby/main
+    unsubBaby = onSnapshot(doc(db, 'users', userId, COLLECTIONS.baby, 'main'), (doc) => {
         if (doc.exists()) {
             state.baby = doc.data();
             updateBabyUI();
@@ -207,16 +250,21 @@ function initListeners() {
     });
 
     // Settings Listener
-    onSnapshot(doc(db, COLLECTIONS.settings, 'main'), (doc) => {
+    // Path: users/{uid}/settings/main
+    unsubSettings = onSnapshot(doc(db, 'users', userId, COLLECTIONS.settings, 'main'), (doc) => {
         if (doc.exists()) {
             state.settings = doc.data();
             updateSettingsUI();
         }
     });
 
-    // Feedings Listener (Sorted by startTime)
-    const qFeedings = query(collection(db, COLLECTIONS.feedings), orderBy("startTime", "desc"));
-    onSnapshot(qFeedings, (snapshot) => {
+    // Feedings Listener
+    // Path: users/{uid}/feedings
+    const qFeedings = query(
+        collection(db, 'users', userId, COLLECTIONS.feedings),
+        orderBy("startTime", "desc")
+    );
+    unsubFeedings = onSnapshot(qFeedings, (snapshot) => {
         state.feedings = [];
         snapshot.forEach((doc) => {
             state.feedings.push(doc.data());
@@ -227,9 +275,13 @@ function initListeners() {
         renderFeedingLog();
     });
 
-    // Sleep Listener (Sorted by startTime)
-    const qSleeps = query(collection(db, COLLECTIONS.sleeps), orderBy("startTime", "desc"));
-    onSnapshot(qSleeps, (snapshot) => {
+    // Sleep Listener
+    // Path: users/{uid}/sleeps
+    const qSleeps = query(
+        collection(db, 'users', userId, COLLECTIONS.sleeps),
+        orderBy("startTime", "desc")
+    );
+    unsubSleeps = onSnapshot(qSleeps, (snapshot) => {
         state.sleeps = [];
         snapshot.forEach((doc) => {
             state.sleeps.push(doc.data());
@@ -1066,11 +1118,121 @@ function initSettings() {
     });
 }
 
+// ===== Authentication Logic =====
+function initAuth() {
+    initAuthForms();
+
+    onAuthStateChanged(auth, (user) => {
+        state.user = user;
+        if (user) {
+            // User is signed in
+            console.log("User signed in:", user.email);
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+
+            // Update profile info
+            const emailDisplay = document.getElementById('userEmailDisplay');
+            if (emailDisplay) emailDisplay.textContent = user.email;
+
+            initListeners(); // Start listening to user's data
+        } else {
+            // User is signed out
+            console.log("User signed out");
+            document.getElementById('authContainer').classList.remove('hidden');
+            document.getElementById('app').classList.add('hidden');
+            initListeners(); // This will clear the state because !state.user
+        }
+    });
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        if (confirm('Are you sure you want to log out?')) {
+            signOut(auth).then(() => {
+                showToast('Logged out');
+            }).catch((error) => {
+                showToast('Error logging out');
+                console.error(error);
+            });
+        }
+    });
+}
+
+function initAuthForms() {
+    const loginScreen = document.getElementById('loginScreen');
+    const signupScreen = document.getElementById('signupScreen');
+    const showSignup = document.getElementById('showSignup');
+    const showLogin = document.getElementById('showLogin');
+
+    // Toggle screens
+    showSignup.addEventListener('click', () => {
+        loginScreen.classList.remove('active');
+        signupScreen.classList.add('active');
+    });
+
+    showLogin.addEventListener('click', () => {
+        signupScreen.classList.remove('active');
+        loginScreen.classList.add('active');
+    });
+
+    // Login Form
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+
+        signInWithEmailAndPassword(auth, email, password)
+            .then((userCredential) => {
+                showToast('Welcome back!');
+            })
+            .catch((error) => {
+                const errorCode = error.code;
+                const errorMessage = error.message;
+                console.error("Login Error", errorCode, errorMessage);
+                if (errorCode === 'auth/invalid-credential') {
+                    showToast('Invalid email or password');
+                } else if (errorCode === 'auth/invalid-email') {
+                    showToast('Invalid email format');
+                } else {
+                    showToast('Login failed: ' + errorMessage);
+                }
+            });
+    });
+
+    // Signup Form
+    document.getElementById('signupForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('signupEmail').value;
+        const password = document.getElementById('signupPassword').value;
+
+        if (password.length < 6) {
+            showToast('Password must be at least 6 characters');
+            return;
+        }
+
+        createUserWithEmailAndPassword(auth, email, password)
+            .then((userCredential) => {
+                showToast('Account created!');
+            })
+            .catch((error) => {
+                const errorCode = error.code;
+                const errorMessage = error.message;
+                console.error("Signup Error", errorCode, errorMessage);
+                if (errorCode === 'auth/email-already-in-use') {
+                    showToast('Email already in use');
+                } else if (errorCode === 'auth/weak-password') {
+                    showToast('Password is too weak');
+                } else {
+                    showToast('Signup failed: ' + errorMessage);
+                }
+            });
+    });
+}
+
 // ===== Initialize App =====
 async function init() {
     try {
-        // initDB() is gone, replaced by Firebase listeners
-        initListeners();
+        // initAuth handles the listeners now
+        initAuth();
 
         initNavigation();
         initModals();
