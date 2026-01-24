@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Simple, calm baby progress tracker for feeding and sleep">
+    <meta name="theme-color" content="#F8F6F3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Baby Tracker">
+
+    <title>My Baby Progress Tracker</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="bottom-nav" id="bottomNav">
+            <button class="nav-item active" data-screen="home">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>Home</span>
+            </button>
+            <button class="nav-item" data-screen="feeding">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+                    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+                    <line x1="6" y1="1" x2="6" y2="4"></line>
+                    <line x1="10" y1="1" x2="10" y2="4"></line>
+                    <line x1="14" y1="1" x2="14" y2="4"></line>
+                </svg>
+                <span>Feeding</span>
+            </button>
+            <button class="nav-item" data-screen="sleep">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <span>Sleep</span>
+            </button>
+            <button class="nav-item" data-screen="settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                    </path>
+                </svg>
+                <span>Settings</span>
+            </button>
+        </nav>
+
+        <!-- Home Screen -->
+        <div class="screen active" id="homeScreen">
+            <header class="app-header">
+                <div class="baby-info" id="babyInfo">
+                    <h1 class="baby-name">Hello, Baby</h1>
+                    <p class="baby-age">Set up your baby's info in settings</p>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <!-- Quick Stats -->
+                <section class="stats-section">
+                    <div class="stat-card feeding-stat">
+                        <div class="stat-icon">🍼</div>
+                        <div class="stat-content">
+                            <span class="stat-label">Last feeding</span>
+                            <span class="stat-value" id="lastFeedingTime">No data yet</span>
+                        </div>
+                    </div>
+                    <div class="stat-card sleep-stat">
+                        <div class="stat-icon">😴</div>
+                        <div class="stat-content">
+                            <span class="stat-label">Last sleep</span>
+                            <span class="stat-value" id="lastSleepTime">No data yet</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Today's Summary -->
+                <section class="summary-section">
+                    <h2 class="section-title">Today's Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <span class="summary-number" id="todayFeedings">0</span>
+                            <span class="summary-label">Feedings</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-number" id="todayAmount">0</span>
+                            <span class="summary-label">ml total</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-number" id="todaySleep">0h</span>
+                            <span class="summary-label">Sleep</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-number" id="todayNaps">0</span>
+                            <span class="summary-label">Naps</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="actions-section">
+                    <h2 class="section-title">Quick Actions</h2>
+                    <div class="action-buttons">
+                        <button class="action-btn breastfeeding-btn" id="startBreastfeeding">
+                            <span class="action-icon">🤱</span>
+                            <span class="action-text">Breastfeeding</span>
+                        </button>
+                        <button class="action-btn bottle-btn" id="logBottle">
+                            <span class="action-icon">🍼</span>
+                            <span class="action-text">Bottle</span>
+                        </button>
+                        <button class="action-btn formula-btn" id="logFormula">
+                            <span class="action-icon">🧴</span>
+                            <span class="action-text">Formula</span>
+                        </button>
+                        <button class="action-btn sleep-btn" id="startSleep">
+                            <span class="action-icon">🌙</span>
+                            <span class="action-text">Start Sleep</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Active Timer -->
+                <section class="active-timer-section hidden" id="activeTimerSection">
+                    <div class="active-timer-card" id="activeTimerCard">
+                        <div class="timer-header">
+                            <span class="timer-type" id="activeTimerType">Breastfeeding</span>
+                            <span class="timer-side" id="activeTimerSide"></span>
+                        </div>
+                        <div class="timer-display" id="activeTimerDisplay">00:00:00</div>
+                        <div class="timer-actions">
+                            <button class="timer-btn switch-btn" id="switchSideBtn">Switch Side</button>
+                            <button class="timer-btn stop-btn" id="stopTimerBtn">Stop</button>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Feeding Log Screen -->
+        <div class="screen" id="feedingScreen">
+            <header class="screen-header">
+                <h1>Feeding Log</h1>
+                <button class="add-btn" id="addFeedingBtn">+ Add</button>
+            </header>
+            <main class="log-content">
+                <div class="date-nav">
+                    <button class="date-nav-btn" id="feedingPrevDay">←</button>
+                    <div class="date-display" id="feedingDateDisplay">
+                        <span class="date-title">Today</span>
+                        <span class="date-subtitle">--</span>
+                    </div>
+                    <button class="date-nav-btn" id="feedingNextDay">→</button>
+                </div>
+                <div class="log-list" id="feedingLogList">
+                    <div class="empty-state">
+                        <div class="empty-icon">🍼</div>
+                        <p>No feedings logged yet</p>
+                        <p class="empty-hint">Tap the + button to add one</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Sleep Log Screen -->
+        <div class="screen" id="sleepScreen">
+            <header class="screen-header">
+                <h1>Sleep Log</h1>
+                <button class="add-btn" id="addSleepBtn">+ Add</button>
+            </header>
+            <main class="log-content">
+                <div class="date-nav">
+                    <button class="date-nav-btn" id="sleepPrevDay">←</button>
+                    <div class="date-display" id="sleepDateDisplay">
+                        <span class="date-title">Today</span>
+                        <span class="date-subtitle">--</span>
+                    </div>
+                    <button class="date-nav-btn" id="sleepNextDay">→</button>
+                </div>
+                <div class="sleep-summary" id="sleepSummary">
+                    <div class="sleep-bar-container">
+                        <div class="sleep-bar" id="sleepBar"></div>
+                    </div>
+                    <div class="sleep-total">
+                        <span id="sleepTotalHours">0h 0m</span> total sleep
+                    </div>
+                </div>
+                <div class="log-list" id="sleepLogList">
+                    <div class="empty-state">
+                        <div class="empty-icon">🌙</div>
+                        <p>No sleep logged yet</p>
+                        <p class="empty-hint">Tap the + button to add one</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Settings Screen -->
+        <div class="screen" id="settingsScreen">
+            <header class="screen-header">
+                <h1>Settings</h1>
+            </header>
+            <main class="settings-content">
+                <section class="settings-section">
+                    <h2 class="settings-title">Baby Information</h2>
+                    <div class="form-group">
+                        <label for="babyName">Baby's Name</label>
+                        <input type="text" id="babyName" placeholder="Enter baby's name">
+                    </div>
+                    <div class="form-group">
+                        <label for="babyBirthDate">Birth Date</label>
+                        <input type="date" id="babyBirthDate">
+                    </div>
+                    <button class="save-btn" id="saveBabyInfo">Save Baby Info</button>
+                </section>
+
+                <section class="settings-section">
+                    <h2 class="settings-title">Preferences</h2>
+                    <div class="setting-item">
+                        <span>Volume Unit</span>
+                        <select id="volumeUnit">
+                            <option value="ml">Milliliters (ml)</option>
+                            <option value="oz">Ounces (oz)</option>
+                        </select>
+                    </div>
+                </section>
+
+                <section class="settings-section">
+                    <h2 class="settings-title">Data</h2>
+                    <button class="secondary-btn" id="exportData">Export Data (CSV)</button>
+                    <button class="danger-btn" id="clearData">Clear All Data</button>
+                </section>
+
+                <section class="settings-section">
+                    <h2 class="settings-title">About</h2>
+                    <p class="about-text">My Baby Progress Tracker v1.0</p>
+                    <p class="about-text">Made with ❤️ for tired parents</p>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Breastfeeding Modal -->
+    <div class="modal" id="breastfeedingModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🤱 Start Breastfeeding</h2>
+                <button class="modal-close" data-modal="breastfeedingModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="side-selector">
+                    <button class="side-btn active" data-side="left">Left</button>
+                    <button class="side-btn" data-side="right">Right</button>
+                    <button class="side-btn" data-side="both">Both</button>
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="breastfeedingNotes" placeholder="Any notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="breastfeedingModal">Cancel</button>
+                <button class="primary-btn" id="confirmBreastfeeding">Start Timer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottle Modal -->
+    <div class="modal" id="bottleModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🍼 Log Bottle</h2>
+                <button class="modal-close" data-modal="bottleModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="bottleAmount">Amount</label>
+                    <div class="amount-input">
+                        <button class="amount-btn minus">−</button>
+                        <input type="number" id="bottleAmount" value="60" min="0" step="10">
+                        <span class="amount-unit" id="bottleUnit">ml</span>
+                        <button class="amount-btn plus">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="bottleTime">Time</label>
+                    <input type="datetime-local" id="bottleTime">
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="bottleNotes" placeholder="Any notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="bottleModal">Cancel</button>
+                <button class="primary-btn" id="confirmBottle">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formula Modal -->
+    <div class="modal" id="formulaModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🧴 Log Formula</h2>
+                <button class="modal-close" data-modal="formulaModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="formulaAmount">Amount</label>
+                    <div class="amount-input">
+                        <button class="amount-btn minus">−</button>
+                        <input type="number" id="formulaAmount" value="60" min="0" step="10">
+                        <span class="amount-unit" id="formulaUnit">ml</span>
+                        <button class="amount-btn plus">+</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="formulaBrand">Brand (optional)</label>
+                    <input type="text" id="formulaBrand" placeholder="Formula brand">
+                </div>
+                <div class="form-group">
+                    <label for="formulaTime">Time</label>
+                    <input type="datetime-local" id="formulaTime">
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="formulaNotes" placeholder="Any notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="formulaModal">Cancel</button>
+                <button class="primary-btn" id="confirmFormula">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sleep Modal -->
+    <div class="modal" id="sleepModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🌙 Start Sleep</h2>
+                <button class="modal-close" data-modal="sleepModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="sleep-type-selector">
+                    <button class="sleep-type-btn active" data-type="nap">😴 Nap</button>
+                    <button class="sleep-type-btn" data-type="night">🌙 Night Sleep</button>
+                </div>
+                <div class="form-group">
+                    <label for="sleepLocation">Location (optional)</label>
+                    <select id="sleepLocation">
+                        <option value="">Select location</option>
+                        <option value="crib">Crib</option>
+                        <option value="bassinet">Bassinet</option>
+                        <option value="stroller">Stroller</option>
+                        <option value="car">Car seat</option>
+                        <option value="arms">In arms</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="sleepModal">Cancel</button>
+                <button class="primary-btn" id="confirmSleep">Start Sleep Timer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Feeding Modal -->
+    <div class="modal" id="editFeedingModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Feeding</h2>
+                <button class="modal-close" data-modal="editFeedingModal">×</button>
+            </div>
+            <div class="modal-body" id="editFeedingBody">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button class="danger-btn" id="deleteFeedingBtn">Delete</button>
+                <button class="primary-btn" id="saveEditFeeding">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Sleep Modal -->
+    <div class="modal" id="editSleepModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Sleep</h2>
+                <button class="modal-close" data-modal="editSleepModal">×</button>
+            </div>
+            <div class="modal-body" id="editSleepBody">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button class="danger-btn" id="deleteSleepBtn">Delete</button>
+                <button class="primary-btn" id="saveEditSleep">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Sleep Indicator -->
+    <div class="active-sleep-banner hidden" id="activeSleepBanner">
+        <div class="sleep-banner-content">
+            <span class="sleep-banner-icon">💤</span>
+            <div class="sleep-banner-info">
+                <span class="sleep-banner-label">Baby is sleeping</span>
+                <span class="sleep-banner-time" id="sleepBannerTime">00:00:00</span>
+            </div>
+            <button class="wake-btn" id="wakeUpBtn">Wake Up</button>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>
