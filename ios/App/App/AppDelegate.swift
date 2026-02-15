@@ -1,5 +1,10 @@
 import UIKit
 import Capacitor
+import UserNotifications
+
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -7,7 +12,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
@@ -46,4 +51,207 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {}
+
+#if canImport(ActivityKit)
+@available(iOS 16.1, *)
+struct BabyTimerLiveAttributes: ActivityAttributes {
+    public struct ContentState: Codable, Hashable {
+        var title: String
+        var elapsedSeconds: Int
+        var paused: Bool
+    }
+
+    var sessionId: String
+    var timerKind: String
+}
+
+@available(iOS 16.1, *)
+final class BabyTimerLiveActivityManager {
+    static let shared = BabyTimerLiveActivityManager()
+    private var activity: Activity<BabyTimerLiveAttributes>?
+
+    private init() {}
+
+    func startOrUpdate(sessionId: String, timerKind: String, title: String, elapsedSeconds: Int, paused: Bool) async -> Bool {
+        let attributes = BabyTimerLiveAttributes(sessionId: sessionId, timerKind: timerKind)
+        let state = BabyTimerLiveAttributes.ContentState(
+            title: title,
+            elapsedSeconds: elapsedSeconds,
+            paused: paused
+        )
+
+        if let existing = activity, existing.attributes.sessionId == sessionId {
+            if #available(iOS 16.2, *) {
+                await existing.update(ActivityContent(state: state, staleDate: nil))
+            } else {
+                await existing.update(using: state)
+            }
+            return true
+        }
+
+        if let existing = activity {
+            if #available(iOS 16.2, *) {
+                await existing.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate)
+            } else {
+                await existing.end(using: state, dismissalPolicy: .immediate)
+            }
+            activity = nil
+        }
+
+        do {
+            activity = try Activity<BabyTimerLiveAttributes>.request(
+                attributes: attributes,
+                contentState: state,
+                pushType: nil
+            )
+            return true
+        } catch {
+            print("Live Activity request failed:", error.localizedDescription)
+            return false
+        }
+    }
+
+    func stop() async {
+        guard let existing = activity else { return }
+        let endState = BabyTimerLiveAttributes.ContentState(
+            title: "Timer complete",
+            elapsedSeconds: 0,
+            paused: false
+        )
+
+        if #available(iOS 16.2, *) {
+            await existing.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
+        } else {
+            await existing.end(using: endState, dismissalPolicy: .immediate)
+        }
+        activity = nil
+    }
+}
+#endif
+
+final class NativeSettingsViewController: UIViewController {
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemGroupedBackground
+        title = "Settings"
+
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .done,
+            target: self,
+            action: #selector(close)
+        )
+
+        let container = UIStackView()
+        container.axis = .vertical
+        container.spacing = 14
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleLabel = UILabel()
+        titleLabel.text = "Native iOS Settings"
+        titleLabel.font = .preferredFont(forTextStyle: .title3)
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "This native screen is ready for final Apple-style controls."
+        subtitleLabel.font = .preferredFont(forTextStyle: .body)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.numberOfLines = 0
+
+        let openSystemSettings = UIButton(type: .system)
+        openSystemSettings.setTitle("Open iOS App Settings", for: .normal)
+        openSystemSettings.addTarget(self, action: #selector(openAppSettings), for: .touchUpInside)
+
+        container.addArrangedSubview(titleLabel)
+        container.addArrangedSubview(subtitleLabel)
+        container.addArrangedSubview(openSystemSettings)
+
+        view.addSubview(container)
+
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
+            container.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20)
+        ])
+    }
+
+    @objc private func close() {
+        dismiss(animated: true)
+    }
+
+    @objc private func openAppSettings() {
+        guard let settingsUrl = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(settingsUrl)
+    }
+}
+
+@objc(TimerLiveActivityPlugin)
+public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "TimerLiveActivityPlugin"
+    public let jsName = "TimerLiveActivity"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "startOrUpdate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openNativeSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPlatformCapabilities", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func startOrUpdate(_ call: CAPPluginCall) {
+        let sessionId = call.getString("sessionId") ?? "session"
+        let timerKind = call.getString("timerKind") ?? "timer"
+        let title = call.getString("title") ?? "Baby Timer"
+        let elapsedSeconds = call.getInt("elapsedSeconds") ?? 0
+        let paused = call.getBool("paused") ?? false
+
+        guard #available(iOS 16.1, *) else {
+            call.resolve(["ok": false, "reason": "ios-version-too-low"])
+            return
+        }
+
+        Task {
+            let success = await BabyTimerLiveActivityManager.shared.startOrUpdate(
+                sessionId: sessionId,
+                timerKind: timerKind,
+                title: title,
+                elapsedSeconds: elapsedSeconds,
+                paused: paused
+            )
+            call.resolve(["ok": success])
+        }
+    }
+
+    @objc func stop(_ call: CAPPluginCall) {
+        guard #available(iOS 16.1, *) else {
+            call.resolve(["ok": false, "reason": "ios-version-too-low"])
+            return
+        }
+
+        Task {
+            await BabyTimerLiveActivityManager.shared.stop()
+            call.resolve(["ok": true])
+        }
+    }
+
+    @objc func openNativeSettings(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let viewController = NativeSettingsViewController()
+            let navController = UINavigationController(rootViewController: viewController)
+            self.bridge?.viewController?.present(navController, animated: true)
+            call.resolve(["ok": true])
+        }
+    }
+
+    @objc func getPlatformCapabilities(_ call: CAPPluginCall) {
+        var supportsLiveActivities = false
+        if #available(iOS 16.1, *) {
+            supportsLiveActivities = true
+        }
+
+        call.resolve([
+            "isNativeIOS": true,
+            "supportsLiveActivities": supportsLiveActivities,
+            "nativeSettingsAvailable": true
+        ])
+    }
 }

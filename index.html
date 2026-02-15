@@ -365,61 +365,87 @@
 
                 <section class="settings-section">
                     <h2 class="settings-title">Preferences</h2>
-                    <div class="setting-item">
-                        <span>Volume Unit</span>
-                        <select id="volumeUnit">
-                            <option value="ml">Milliliters (ml)</option>
-                            <option value="oz">Ounces (oz)</option>
-                        </select>
+                    <div class="ios-list-group">
+                        <div class="ios-row">
+                            <span class="ios-label">Volume Unit</span>
+                            <select id="volumeUnit" class="ios-inline-select">
+                                <option value="ml">ml</option>
+                                <option value="oz">oz</option>
+                            </select>
+                        </div>
                     </div>
                 </section>
 
                 <section class="settings-section">
                     <h2 class="settings-title">Notifications</h2>
-                    <button class="secondary-btn" id="enableNotifications">Enable Notifications</button>
-
-                    <div class="setting-item">
-                        <span>Awake alert</span>
-                        <select id="awakeAlertEnabled">
-                            <option value="true">On</option>
-                            <option value="false">Off</option>
-                        </select>
-                    </div>
-                    <div class="setting-item">
-                        <span>Awake after (minutes)</span>
-                        <input type="number" id="awakeAlertMinutes" min="1" max="720" step="1" value="60">
-                    </div>
-
-                    <div class="setting-item">
-                        <span>Nap alert</span>
-                        <select id="napAlertEnabled">
-                            <option value="true">On</option>
-                            <option value="false">Off</option>
-                        </select>
-                    </div>
-                    <div class="setting-item">
-                        <span>Nap after (minutes)</span>
-                        <input type="number" id="napAlertMinutes" min="1" max="720" step="1" value="140">
+                    <div class="ios-list-group">
+                        <div class="ios-row">
+                            <span class="ios-label">Notifications</span>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="notificationsEnabled">
+                                <span class="ios-slider"></span>
+                            </label>
+                        </div>
+                        <div class="ios-row ios-row-stack">
+                            <span class="ios-label">System Permission</span>
+                            <span class="ios-value" id="notificationPermissionStatus">Not requested</span>
+                        </div>
+                        <div class="ios-row ios-row-actions">
+                            <button class="secondary-btn" id="enableNotifications">Enable Notifications</button>
+                            <button class="secondary-btn" id="testNotificationBtn">Send Test Alert</button>
+                        </div>
                     </div>
 
-                    <div class="setting-item">
-                        <span>Night sleep alert</span>
-                        <select id="nightSleepAlertEnabled">
-                            <option value="true">On</option>
-                            <option value="false">Off</option>
-                        </select>
-                    </div>
-                    <div class="setting-item">
-                        <span>Night sleep after (minutes)</span>
-                        <input type="number" id="nightSleepAlertMinutes" min="1" max="960" step="1" value="240">
+                    <div class="ios-list-group">
+                        <div class="ios-row">
+                            <span class="ios-label">Live Activity (fallback)</span>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="liveActivityEnabled">
+                                <span class="ios-slider"></span>
+                            </label>
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Awake Alert</span>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="awakeAlertEnabled">
+                                <span class="ios-slider"></span>
+                            </label>
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Awake After (min)</span>
+                            <input type="number" class="ios-number" id="awakeAlertMinutes" min="1" max="720" step="1" value="60">
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Nap Alert</span>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="napAlertEnabled">
+                                <span class="ios-slider"></span>
+                            </label>
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Nap After (min)</span>
+                            <input type="number" class="ios-number" id="napAlertMinutes" min="1" max="720" step="1" value="140">
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Night Sleep Alert</span>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="nightSleepAlertEnabled">
+                                <span class="ios-slider"></span>
+                            </label>
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Night Sleep After (min)</span>
+                            <input type="number" class="ios-number" id="nightSleepAlertMinutes" min="1" max="960" step="1" value="240">
+                        </div>
                     </div>
 
-                    <button class="save-btn" id="saveNotificationSettings">Save Notification Settings</button>
+                    <button class="save-btn" id="saveNotificationSettings">Save Notifications</button>
                 </section>
 
                 <section class="settings-section">
                     <h2 class="settings-title">Account</h2>
                     <p class="user-email-display" id="userEmailDisplay"></p>
+                    <button class="secondary-btn hidden" id="openNativeSettingsBtn">Open Native iOS Settings</button>
                     <button class="secondary-btn" id="logoutBtn">Log Out</button>
                 </section>
 

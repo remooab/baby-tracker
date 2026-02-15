@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeApp } from "./vendor/firebase/firebase-app.js";
 import {
     getFirestore,
     collection,
@@ -9,14 +9,19 @@ import {
     enableIndexedDbPersistence,
     query,
     orderBy
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+} from "./vendor/firebase/firebase-firestore.js";
 import {
+    initializeAuth,
     getAuth,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
+    setPersistence,
+    indexedDBLocalPersistence,
+    browserLocalPersistence,
+    inMemoryPersistence,
     signOut,
     onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+} from "./vendor/firebase/firebase-auth.js";
 
 // ===== Baby Progress Tracker - Firebase Edition =====
 
@@ -33,7 +38,49 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app);
+
+const isNativeRuntime = typeof window !== 'undefined' && !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+
+const auth = isNativeRuntime
+    ? initializeAuth(app, { persistence: inMemoryPersistence })
+    : getAuth(app);
+
+function isNativeCapacitorApp() {
+    return isNativeRuntime;
+}
+
+async function configureAuthPersistence() {
+    if (isNativeCapacitorApp()) return;
+
+    const timeoutMs = 2500;
+    const withTimeout = (promise) => Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('auth-persistence-timeout')), timeoutMs))
+    ]);
+
+    try {
+        await withTimeout(setPersistence(auth, indexedDBLocalPersistence));
+    } catch (error) {
+        console.warn('IndexedDB auth persistence unavailable, trying browser local:', error);
+        try {
+            await withTimeout(setPersistence(auth, browserLocalPersistence));
+        } catch (fallbackError) {
+            console.warn('Browser local persistence unavailable, using memory persistence:', fallbackError);
+            try {
+                await withTimeout(setPersistence(auth, inMemoryPersistence));
+            } catch (memoryError) {
+                console.warn('Could not set auth persistence:', memoryError);
+            }
+        }
+    }
+}
+
+function withAuthRequestTimeout(promise, timeoutMs = 12000) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject({ code: 'auth/request-timeout', message: 'Authentication request timed out' }), timeoutMs))
+    ]);
+}
 
 // Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {
@@ -55,6 +102,7 @@ const COLLECTIONS = {
 const DEFAULT_SETTINGS = {
     volumeUnit: 'ml',
     notificationsEnabled: false,
+    liveActivityEnabled: true,
     awakeAlertEnabled: true,
     awakeAlertMinutes: 60,
     napAlertEnabled: true,
@@ -87,6 +135,75 @@ const notificationRuntime = {
 let notificationCheckInterval = null;
 let pendingNotificationAction = null;
 
+const nativeTimerLiveActivity = (typeof window !== 'undefined' && window.Capacitor && typeof window.Capacitor.registerPlugin === 'function')
+    ? window.Capacitor.registerPlugin('TimerLiveActivity')
+    : null;
+
+const nativeCapabilities = {
+    loaded: false,
+    isNativeIOS: false,
+    supportsLiveActivities: false,
+    nativeSettingsAvailable: false
+};
+
+async function loadNativeCapabilities() {
+    if (!isNativeCapacitorApp() || !nativeTimerLiveActivity) return;
+    try {
+        const result = await nativeTimerLiveActivity.getPlatformCapabilities();
+        nativeCapabilities.loaded = true;
+        nativeCapabilities.isNativeIOS = !!result?.isNativeIOS;
+        nativeCapabilities.supportsLiveActivities = !!result?.supportsLiveActivities;
+        nativeCapabilities.nativeSettingsAvailable = !!result?.nativeSettingsAvailable;
+    } catch (error) {
+        console.warn('Native capabilities unavailable:', error);
+    }
+}
+
+function getFeedingElapsedMs(feeding) {
+    if (!feeding) return 0;
+    const now = Date.now();
+    const referenceEnd = feeding.isPaused ? feeding.pauseStartTime : (feeding.endTime || now);
+    return Math.max(0, referenceEnd - feeding.startTime - (feeding.totalPausedMs || 0));
+}
+
+async function syncNativeLiveActivity() {
+    if (!isNativeCapacitorApp()) return;
+    if (!nativeTimerLiveActivity) return;
+    if (!state.settings.liveActivityEnabled) {
+        try { await nativeTimerLiveActivity.stop(); } catch (error) { console.warn(error); }
+        return;
+    }
+    if (!nativeCapabilities.supportsLiveActivities) return;
+
+    try {
+        if (state.activeTimer) {
+            await nativeTimerLiveActivity.startOrUpdate({
+                sessionId: state.activeTimer.id,
+                timerKind: 'breast',
+                title: `Breastfeeding ${state.activeTimer.side?.toUpperCase() || ''}`.trim(),
+                elapsedSeconds: Math.floor(getFeedingElapsedMs(state.activeTimer) / 1000),
+                paused: !!state.activeTimer.isPaused
+            });
+            return;
+        }
+
+        if (state.activeSleep) {
+            await nativeTimerLiveActivity.startOrUpdate({
+                sessionId: state.activeSleep.id,
+                timerKind: state.activeSleep.type || 'sleep',
+                title: state.activeSleep.type === 'nap' ? 'Nap Timer' : 'Night Sleep Timer',
+                elapsedSeconds: Math.floor(getEffectiveSleepElapsedMs(state.activeSleep) / 1000),
+                paused: !!state.activeSleep.isPaused
+            });
+            return;
+        }
+
+        await nativeTimerLiveActivity.stop();
+    } catch (error) {
+        console.warn('Native Live Activity sync failed:', error);
+    }
+}
+
 function clampMinutes(value, fallback) {
     const parsed = parseInt(value, 10);
     if (Number.isNaN(parsed)) return fallback;
@@ -99,6 +216,7 @@ function normalizeSettings(settings = {}) {
         ...settings,
         volumeUnit: settings.volumeUnit === 'oz' ? 'oz' : 'ml',
         notificationsEnabled: !!settings.notificationsEnabled,
+        liveActivityEnabled: settings.liveActivityEnabled !== false,
         awakeAlertEnabled: settings.awakeAlertEnabled !== false,
         awakeAlertMinutes: clampMinutes(settings.awakeAlertMinutes, DEFAULT_SETTINGS.awakeAlertMinutes),
         napAlertEnabled: settings.napAlertEnabled !== false,
@@ -166,7 +284,7 @@ async function closeSystemNotificationsByTag(tag) {
 }
 
 async function updateActiveSessionNotification() {
-    if (!state.settings.notificationsEnabled) {
+    if (!state.settings.notificationsEnabled || !state.settings.liveActivityEnabled) {
         await closeSystemNotificationsByTag('active-session');
         return;
     }
@@ -298,6 +416,7 @@ async function togglePauseActiveSleep() {
 }
 
 function initServiceWorkerMessages() {
+    if (isNativeCapacitorApp()) return;
     if (!('serviceWorker' in navigator)) return;
 
     navigator.serviceWorker.addEventListener('message', async (event) => {
@@ -339,6 +458,7 @@ async function handlePendingNotificationAction() {
 }
 
 function consumeNotificationActionFromUrl() {
+    if (isNativeCapacitorApp()) return;
     const params = new URLSearchParams(window.location.search);
     const action = params.get('notificationAction');
     if (!action) return;
@@ -431,6 +551,7 @@ function evaluateThresholdAlerts() {
     if (!state.user) return;
     evaluateAwakeAlert();
     evaluateSleepAlert();
+    syncNativeLiveActivity();
     handlePendingNotificationAction().catch((error) => {
         console.error('Pending action handler failed:', error);
     });
@@ -446,6 +567,7 @@ function startNotificationEngine() {
 }
 
 async function registerServiceWorker() {
+    if (isNativeCapacitorApp()) return;
     if (!('serviceWorker' in navigator)) return;
     try {
         await navigator.serviceWorker.register('./sw.js');
@@ -792,26 +914,41 @@ function updateSettingsUI() {
     state.settings = settings;
 
     document.getElementById('volumeUnit').value = settings.volumeUnit;
-    document.getElementById('awakeAlertEnabled').value = String(settings.awakeAlertEnabled);
+    document.getElementById('notificationsEnabled').checked = settings.notificationsEnabled;
+    document.getElementById('liveActivityEnabled').checked = settings.liveActivityEnabled;
+    document.getElementById('awakeAlertEnabled').checked = settings.awakeAlertEnabled;
     document.getElementById('awakeAlertMinutes').value = settings.awakeAlertMinutes;
-    document.getElementById('napAlertEnabled').value = String(settings.napAlertEnabled);
+    document.getElementById('napAlertEnabled').checked = settings.napAlertEnabled;
     document.getElementById('napAlertMinutes').value = settings.napAlertMinutes;
-    document.getElementById('nightSleepAlertEnabled').value = String(settings.nightSleepAlertEnabled);
+    document.getElementById('nightSleepAlertEnabled').checked = settings.nightSleepAlertEnabled;
     document.getElementById('nightSleepAlertMinutes').value = settings.nightSleepAlertMinutes;
 
     const permission = getNotificationPermission();
     const enableBtn = document.getElementById('enableNotifications');
+    const permissionStatus = document.getElementById('notificationPermissionStatus');
+    const nativeSettingsButton = document.getElementById('openNativeSettingsBtn');
+
+    if (nativeSettingsButton) {
+        nativeSettingsButton.classList.toggle('hidden', !nativeCapabilities.nativeSettingsAvailable);
+    }
+
     if (permission === 'unsupported') {
         enableBtn.textContent = 'Notifications not supported';
         enableBtn.disabled = true;
+        permissionStatus.textContent = 'Unsupported on this device';
         return;
     }
+
+    enableBtn.disabled = false;
     if (permission === 'granted') {
-        enableBtn.textContent = settings.notificationsEnabled ? 'Notifications Enabled' : 'Enable Notifications';
+        enableBtn.textContent = settings.notificationsEnabled ? 'Permission Granted' : 'Enable Notifications';
+        permissionStatus.textContent = 'Granted';
     } else if (permission === 'denied') {
         enableBtn.textContent = 'Notifications Blocked in Browser';
+        permissionStatus.textContent = 'Blocked';
     } else {
         enableBtn.textContent = 'Enable Notifications';
+        permissionStatus.textContent = 'Not requested';
     }
 }
 
@@ -1606,26 +1743,63 @@ function initSettings() {
         updateSettingsUI();
     });
 
+    document.getElementById('testNotificationBtn').addEventListener('click', async () => {
+        if (getNotificationPermission() !== 'granted') {
+            showToast('Please enable notifications first');
+            return;
+        }
+
+        await showSystemNotification(
+            'Baby Tracker Test Alert',
+            'Notifications are working on this device.',
+            `test-${Date.now()}`,
+            { type: 'test-alert' }
+        );
+        showToast('Test notification sent');
+    });
+
     document.getElementById('saveNotificationSettings').addEventListener('click', async () => {
-        const awakeAlertEnabled = document.getElementById('awakeAlertEnabled').value === 'true';
+        const notificationsEnabled = document.getElementById('notificationsEnabled').checked;
+        const liveActivityEnabled = document.getElementById('liveActivityEnabled').checked;
+        const awakeAlertEnabled = document.getElementById('awakeAlertEnabled').checked;
         const awakeAlertMinutes = clampMinutes(document.getElementById('awakeAlertMinutes').value, DEFAULT_SETTINGS.awakeAlertMinutes);
-        const napAlertEnabled = document.getElementById('napAlertEnabled').value === 'true';
+        const napAlertEnabled = document.getElementById('napAlertEnabled').checked;
         const napAlertMinutes = clampMinutes(document.getElementById('napAlertMinutes').value, DEFAULT_SETTINGS.napAlertMinutes);
-        const nightSleepAlertEnabled = document.getElementById('nightSleepAlertEnabled').value === 'true';
+        const nightSleepAlertEnabled = document.getElementById('nightSleepAlertEnabled').checked;
         const nightSleepAlertMinutes = clampMinutes(document.getElementById('nightSleepAlertMinutes').value, DEFAULT_SETTINGS.nightSleepAlertMinutes);
 
+        const permissionGranted = getNotificationPermission() === 'granted';
+
         await saveUserSettings({
+            notificationsEnabled: notificationsEnabled && permissionGranted,
+            liveActivityEnabled,
             awakeAlertEnabled,
             awakeAlertMinutes,
             napAlertEnabled,
             napAlertMinutes,
             nightSleepAlertEnabled,
-            nightSleepAlertMinutes,
-            notificationsEnabled: getNotificationPermission() === 'granted'
+            nightSleepAlertMinutes
         });
 
         showToast('Notification settings saved');
+        updateSettingsUI();
     });
+
+    const openNativeSettingsBtn = document.getElementById('openNativeSettingsBtn');
+    if (openNativeSettingsBtn) {
+        openNativeSettingsBtn.addEventListener('click', async () => {
+            if (!nativeTimerLiveActivity) {
+                showToast('Native settings are only available on iOS app');
+                return;
+            }
+            try {
+                await nativeTimerLiveActivity.openNativeSettings();
+            } catch (error) {
+                console.warn('Failed to open native settings:', error);
+                showToast('Could not open native settings');
+            }
+        });
+    }
 
     // Export data (Client side generation from state)
     document.getElementById('exportData').addEventListener('click', () => {
@@ -1672,7 +1846,14 @@ function initSettings() {
 function initAuth() {
     initAuthForms();
 
+    let signOutDebounce = null;
+
     onAuthStateChanged(auth, (user) => {
+        if (signOutDebounce) {
+            clearTimeout(signOutDebounce);
+            signOutDebounce = null;
+        }
+
         state.user = user;
         if (user) {
             // User is signed in
@@ -1686,11 +1867,22 @@ function initAuth() {
 
             initListeners(); // Start listening to user's data
         } else {
-            // User is signed out
-            console.log("User signed out");
-            document.getElementById('authContainer').classList.remove('hidden');
-            document.getElementById('app').classList.add('hidden');
-            initListeners(); // This will clear the state because !state.user
+            // Debounce transient null auth states seen in some simulator/native webview runs
+            signOutDebounce = setTimeout(() => {
+                const currentUser = auth.currentUser;
+                if (currentUser) {
+                    state.user = currentUser;
+                    document.getElementById('authContainer').classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                    initListeners();
+                    return;
+                }
+
+                console.log("User signed out");
+                document.getElementById('authContainer').classList.remove('hidden');
+                document.getElementById('app').classList.add('hidden');
+                initListeners(); // This will clear the state because !state.user
+            }, 1200);
         }
     });
 
@@ -1725,33 +1917,40 @@ function initAuthForms() {
     });
 
     // Login Form
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
+        const email = document.getElementById('loginEmail').value.trim().toLowerCase();
         const password = document.getElementById('loginPassword').value;
 
-        signInWithEmailAndPassword(auth, email, password)
-            .then((userCredential) => {
-                showToast('Welcome back!');
-            })
-            .catch((error) => {
-                const errorCode = error.code;
-                const errorMessage = error.message;
-                console.error("Login Error", errorCode, errorMessage);
-                if (errorCode === 'auth/invalid-credential') {
-                    showToast('Invalid email or password');
-                } else if (errorCode === 'auth/invalid-email') {
-                    showToast('Invalid email format');
-                } else {
-                    showToast('Login failed: ' + errorMessage);
-                }
-            });
+        try {
+            await withAuthRequestTimeout(signInWithEmailAndPassword(auth, email, password));
+            showToast('Welcome back!');
+        } catch (error) {
+            const errorCode = error.code;
+            const errorMessage = error.message;
+            console.error("Login Error", errorCode, errorMessage);
+            if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
+                showToast('Invalid email or password');
+            } else if (errorCode === 'auth/invalid-email') {
+                showToast('Invalid email format');
+            } else if (errorCode === 'auth/network-request-failed') {
+                showToast('Network error. Check simulator internet and try again.');
+            } else if (errorCode === 'auth/too-many-requests') {
+                showToast('Too many attempts. Please wait and try again.');
+            } else if (errorCode === 'auth/operation-not-supported-in-this-environment') {
+                showToast('Login not supported in this simulator environment.');
+            } else if (errorCode === 'auth/request-timeout') {
+                showToast('Login timed out. Please try again.');
+            } else {
+                showToast('Login failed: ' + errorMessage);
+            }
+        }
     });
 
     // Signup Form
-    document.getElementById('signupForm').addEventListener('submit', (e) => {
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('signupEmail').value;
+        const email = document.getElementById('signupEmail').value.trim().toLowerCase();
         const password = document.getElementById('signupPassword').value;
 
         if (password.length < 6) {
@@ -1759,34 +1958,52 @@ function initAuthForms() {
             return;
         }
 
-        createUserWithEmailAndPassword(auth, email, password)
-            .then((userCredential) => {
-                showToast('Account created!');
-            })
-            .catch((error) => {
-                const errorCode = error.code;
-                const errorMessage = error.message;
-                console.error("Signup Error", errorCode, errorMessage);
-                if (errorCode === 'auth/email-already-in-use') {
+        try {
+            await withAuthRequestTimeout(createUserWithEmailAndPassword(auth, email, password));
+            showToast('Account created!');
+        } catch (error) {
+            const errorCode = error.code;
+            const errorMessage = error.message;
+            console.error("Signup Error", errorCode, errorMessage);
+            if (errorCode === 'auth/email-already-in-use') {
+                try {
+                    await withAuthRequestTimeout(signInWithEmailAndPassword(auth, email, password));
+                    showToast('Welcome back!');
+                } catch (_signInError) {
                     showToast('Email already in use');
-                } else if (errorCode === 'auth/weak-password') {
-                    showToast('Password is too weak');
-                } else {
-                    showToast('Signup failed: ' + errorMessage);
                 }
-            });
+            } else if (errorCode === 'auth/weak-password') {
+                showToast('Password is too weak');
+            } else if (errorCode === 'auth/network-request-failed') {
+                showToast('Network error. Check simulator internet and try again.');
+            } else if (errorCode === 'auth/operation-not-supported-in-this-environment') {
+                showToast('Signup not supported in this simulator environment.');
+            } else if (errorCode === 'auth/request-timeout') {
+                showToast('Signup timed out. Please try again.');
+            } else {
+                showToast('Signup failed: ' + errorMessage);
+            }
+        }
     });
 }
 
 // ===== Initialize App =====
 async function init() {
     try {
-        await registerServiceWorker();
+        window.__APP_READY = true;
+
+        // Always wire auth UI immediately; persistence setup runs in background.
+        initAuth();
+        await loadNativeCapabilities();
+        configureAuthPersistence().catch((error) => {
+            console.warn('Auth persistence setup failed:', error);
+        });
+
+        registerServiceWorker().catch((error) => {
+            console.warn('Service worker setup failed:', error);
+        });
         initServiceWorkerMessages();
         consumeNotificationActionFromUrl();
-
-        // initAuth handles the listeners now
-        initAuth();
 
         initNavigation();
         initModals();

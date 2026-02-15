@@ -91,7 +91,8 @@ Use short thresholds (1-2 min) before production defaults.
 
 ## 8) Current behavior notes
 
-- iOS web wrappers do not provide true ActivityKit Live Activities from this codebase.
+- iOS now includes a native Capacitor bridge scaffold for Live Activity start/update/stop calls and native settings launch.
+- True lock-screen Live Activity UI still requires adding an iOS Widget Extension + `ActivityConfiguration` + App Intents in Xcode.
 - Android notification action fallback is implemented via service worker -> app message bridge.
 - Closed-app action fallback uses URL handoff (`notificationAction`) and in-app action queue.
 
@@ -106,6 +107,7 @@ Use short thresholds (1-2 min) before production defaults.
 
 For true iOS Live Activities:
 
-- Add native iOS module with ActivityKit + App Intents.
-- Bridge timer/sleep state from web layer to native layer.
-- Keep current web notifications as fallback on unsupported devices.
+- Add Widget Extension target in Xcode and implement `ActivityConfiguration` UI.
+- Add App Intents for Pause/Resume/Stop actions.
+- Keep the current native bridge + web notifications as fallbacks.
+- Ensure `NSSupportsLiveActivities` is present in `Info.plist` and deployment target is iOS 16.1+.

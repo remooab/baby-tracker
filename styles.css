@@ -710,6 +710,122 @@ select {
     text-align: right;
 }
 
+.ios-list-group {
+    background: var(--bg-primary);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    margin-bottom: 12px;
+}
+
+.ios-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-height: 52px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    gap: 12px;
+}
+
+.ios-row:last-child {
+    border-bottom: none;
+}
+
+.ios-label {
+    font-size: 0.98rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.ios-value {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.ios-row-stack {
+    align-items: flex-start;
+    flex-direction: column;
+    min-height: auto;
+}
+
+.ios-row-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.ios-row-actions .secondary-btn {
+    margin-bottom: 0;
+    padding: 12px;
+}
+
+.ios-inline-select {
+    width: auto;
+    min-width: 90px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--bg-secondary);
+    padding: 8px 10px;
+    border-radius: 10px;
+}
+
+.ios-number {
+    width: 94px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.ios-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 28px;
+}
+
+.ios-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.ios-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cfd3d9;
+    transition: 0.2s;
+    border-radius: 28px;
+}
+
+.ios-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    top: 3px;
+    background-color: white;
+    transition: 0.2s;
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm);
+}
+
+.ios-switch input:checked+.ios-slider {
+    background-color: var(--success);
+}
+
+.ios-switch input:checked+.ios-slider:before {
+    transform: translateX(20px);
+}
+
 .save-btn,
 .primary-btn {
     width: 100%;

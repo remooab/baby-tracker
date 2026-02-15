@@ -5,7 +5,7 @@
   "description": "My Baby Progress Tracker - web app + Capacitor wrapper",
   "scripts": {
     "serve": "npx http-server . -p 5173 -c-1",
-    "build:web": "rm -rf www && mkdir -p www/icons && cp index.html app.js styles.css manifest.json sw.js www/ && cp icons/* www/icons/",
+    "build:web": "rm -rf www && mkdir -p www/icons www/vendor/firebase && cp index.html app.js styles.css manifest.json sw.js www/ && cp icons/* www/icons/ && cp vendor/firebase/* www/vendor/firebase/",
     "cap:init": "npx cap init",
     "cap:sync": "npx cap sync",
     "cap:ios": "npx cap open ios",
