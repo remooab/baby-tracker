@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Baby Tracker</string>
+    <string name="title_activity_main">Baby Tracker</string>
+    <string name="package_name">com.trueinspo.babytracker</string>
+    <string name="custom_url_scheme">com.trueinspo.babytracker</string>
+</resources>

@@ -1,0 +1,22 @@
+{
+  "name": "baby-tracker",
+  "version": "1.1.0",
+  "private": true,
+  "description": "My Baby Progress Tracker - web app + Capacitor wrapper",
+  "scripts": {
+    "serve": "npx http-server . -p 5173 -c-1",
+    "build:web": "rm -rf www && mkdir -p www/icons && cp index.html app.js styles.css manifest.json sw.js www/ && cp icons/* www/icons/",
+    "cap:init": "npx cap init",
+    "cap:sync": "npx cap sync",
+    "cap:ios": "npx cap open ios",
+    "cap:android": "npx cap open android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.1.0",
+    "@capacitor/cli": "^7.1.0",
+    "@capacitor/core": "^7.1.0",
+    "@capacitor/ios": "^7.1.0",
+    "http-server": "^14.1.1",
+    "typescript": "^5.9.3"
+  }
+}
