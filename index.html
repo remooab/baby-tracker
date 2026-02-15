@@ -25,7 +25,13 @@
         <div class="auth-screen active" id="loginScreen">
             <div class="auth-box">
                 <div class="auth-header">
-                    <div class="auth-logo">👶</div>
+                    <div class="auth-logo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48"
+                            height="48">
+                            <path
+                                d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                        </svg>
+                    </div>
                     <h1>Welcome Back</h1>
                     <p>Track your baby's journey</p>
                 </div>
@@ -49,7 +55,13 @@
         <div class="auth-screen" id="signupScreen">
             <div class="auth-box">
                 <div class="auth-header">
-                    <div class="auth-logo">✨</div>
+                    <div class="auth-logo">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48"
+                            height="48">
+                            <polygon
+                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                    </div>
                     <h1>Create Account</h1>
                     <p>Start tracking today</p>
                 </div>
@@ -76,30 +88,38 @@
         <!-- Navigation -->
         <nav class="bottom-nav" id="bottomNav">
             <button class="nav-item active" data-screen="home">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
                     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                     <polyline points="9 22 9 12 15 12 15 22"></polyline>
                 </svg>
                 <span>Home</span>
             </button>
             <button class="nav-item" data-screen="feeding">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
-                    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
-                    <line x1="6" y1="1" x2="6" y2="4"></line>
-                    <line x1="10" y1="1" x2="10" y2="4"></line>
-                    <line x1="14" y1="1" x2="14" y2="4"></line>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M5 12h14M12 5v14" />
+                    <path d="M12 5a7 7 0 0 1 0 14 7 7 0 0 1 0-14z" />
+                    <!-- Using a simple plus/circle or similar abstract for feeding if bottle is too specific? 
+                         Actually, let's stick to the bottle-like icon but cleaner.
+                         The previous icon was a bit complex. Let's use a simple bottle. -->
+                    <path d="M9 2v2" />
+                    <path d="M15 2v2" />
+                    <path d="M12 2v2" />
+                    <rect x="7" y="4" width="10" height="16" rx="2" />
                 </svg>
                 <span>Feeding</span>
             </button>
             <button class="nav-item" data-screen="sleep">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                 </svg>
                 <span>Sleep</span>
             </button>
             <button class="nav-item" data-screen="settings">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path
                         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
@@ -122,14 +142,31 @@
                 <!-- Quick Stats -->
                 <section class="stats-section">
                     <div class="stat-card feeding-stat">
-                        <div class="stat-icon">🍼</div>
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24"
+                                height="24">
+                                <path d="M21 16v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3" />
+                                <path d="M7 16v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
+                                <path d="M12 3v13" />
+                            </svg>
+                        </div>
                         <div class="stat-content">
                             <span class="stat-label">Last feeding</span>
                             <span class="stat-value" id="lastFeedingTime">No data yet</span>
                         </div>
                     </div>
                     <div class="stat-card sleep-stat">
-                        <div class="stat-icon">😴</div>
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24"
+                                height="24">
+                                <path d="M9 18v-6a6 6 0 0 1 6-6h3" />
+                                <circle cx="13" cy="12" r="2" />
+                                <path d="M13 3L4 14h7v7l9-11h-7z" />
+                                <!-- Changed to Zap/Energy for Awake/Sleep or maybe Moon for sleep? 
+                                     Let's use a nice Moon for Sleep Stat -->
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            </svg>
+                        </div>
                         <div class="stat-content">
                             <span class="stat-label">Last sleep</span>
                             <span class="stat-value" id="lastSleepTime">No data yet</span>
@@ -165,20 +202,55 @@
                     <h2 class="section-title">Quick Actions</h2>
                     <div class="action-buttons">
                         <button class="action-btn breastfeeding-btn" id="startBreastfeeding">
-                            <span class="action-icon">🤱</span>
-                            <span class="action-text">Breastfeeding</span>
+                            <span class="action-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32"
+                                    height="32">
+                                    <path
+                                        d="M12 21a9 9 0 0 1-9-9c0-3.87 2.4-7.1 5.7-8.4C9.6 3.2 10.8 3 12 3c1.2 0 2.4.2 3.3.6C18.6 4.9 21 8.1 21 12c0 .5-.1 1-.2 1.5" />
+                                    <!-- A heart or subtle curve for breastfeeding -->
+                                    <path d="M12 21a9.01 9.01 0 0 0 9-9" />
+                                    <path d="M12 21v-9" />
+                                    <path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                                </svg>
+                            </span>
+                            <span class="action-text">Nursing</span>
                         </button>
                         <button class="action-btn bottle-btn" id="logBottle">
-                            <span class="action-icon">🍼</span>
+                            <span class="action-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32"
+                                    height="32">
+                                    <path d="M9 2v2" />
+                                    <path d="M15 2v2" />
+                                    <path d="M12 2v2" />
+                                    <rect x="7" y="4" width="10" height="16" rx="2" />
+                                    <path d="M7 9h10" />
+                                    <path d="M7 14h10" />
+                                </svg>
+                            </span>
                             <span class="action-text">Bottle</span>
                         </button>
-                        <button class="action-btn formula-btn" id="logFormula">
-                            <span class="action-icon">🧴</span>
-                            <span class="action-text">Formula</span>
+                        <button class="action-btn vitamin-btn" id="logVitamin">
+                            <span class="action-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32"
+                                    height="32">
+                                    <path d="M12 2a5 5 0 0 1 5 5v10a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z" />
+                                    <path d="M8 7h8" />
+                                    <path d="M12 17v-4" />
+                                    <path d="M10 13h4" />
+                                </svg>
+                            </span>
+                            <span class="action-text">Vitamin</span>
                         </button>
                         <button class="action-btn sleep-btn" id="startSleep">
-                            <span class="action-icon">🌙</span>
-                            <span class="action-text">Start Sleep</span>
+                            <span class="action-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32"
+                                    height="32">
+                                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                                    <path d="M12 4v2" />
+                                    <path d="M12 18v2" />
+                                </svg>
+                            </span>
+                            <span class="action-text">Sleep</span>
                         </button>
                     </div>
                 </section>
@@ -193,6 +265,7 @@
                         <div class="timer-display" id="activeTimerDisplay">00:00:00</div>
                         <div class="timer-actions">
                             <button class="timer-btn switch-btn" id="switchSideBtn">Switch Side</button>
+                            <button class="timer-btn pause-btn" id="pauseTimerBtn">Pause</button>
                             <button class="timer-btn stop-btn" id="stopTimerBtn">Stop</button>
                         </div>
                     </div>
@@ -217,7 +290,15 @@
                 </div>
                 <div class="log-list" id="feedingLogList">
                     <div class="empty-state">
-                        <div class="empty-icon">🍼</div>
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48"
+                                height="48">
+                                <path d="M9 2v2" />
+                                <path d="M15 2v2" />
+                                <path d="M12 2v2" />
+                                <rect x="7" y="4" width="10" height="16" rx="2" />
+                            </svg>
+                        </div>
                         <p>No feedings logged yet</p>
                         <p class="empty-hint">Tap the + button to add one</p>
                     </div>
@@ -250,7 +331,12 @@
                 </div>
                 <div class="log-list" id="sleepLogList">
                     <div class="empty-state">
-                        <div class="empty-icon">🌙</div>
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48"
+                                height="48">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            </svg>
+                        </div>
                         <p>No sleep logged yet</p>
                         <p class="empty-hint">Tap the + button to add one</p>
                     </div>
@@ -314,7 +400,16 @@
     <div class="modal" id="breastfeedingModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🤱 Start Breastfeeding</h2>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path
+                            d="M12 21a9 9 0 0 1-9-9c0-3.87 2.4-7.1 5.7-8.4C9.6 3.2 10.8 3 12 3c1.2 0 2.4.2 3.3.6C18.6 4.9 21 8.1 21 12c0 .5-.1 1-.2 1.5" />
+                        <path d="M12 21a9.01 9.01 0 0 0 9-9" />
+                        <path d="M12 21v-9" />
+                    </svg>
+                    Start Nursing
+                </h2>
                 <button class="modal-close" data-modal="breastfeedingModal">×</button>
             </div>
             <div class="modal-body">
@@ -339,7 +434,16 @@
     <div class="modal" id="bottleModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🍼 Log Bottle</h2>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path d="M9 2v2" />
+                        <path d="M15 2v2" />
+                        <path d="M12 2v2" />
+                        <rect x="7" y="4" width="10" height="16" rx="2" />
+                    </svg>
+                    Log Bottle
+                </h2>
                 <button class="modal-close" data-modal="bottleModal">×</button>
             </div>
             <div class="modal-body">
@@ -372,7 +476,18 @@
     <div class="modal" id="formulaModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🧴 Log Formula</h2>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path d="M9 2v2" />
+                        <path d="M15 2v2" />
+                        <path d="M12 2v2" />
+                        <rect x="7" y="4" width="10" height="16" rx="2" />
+                        <path d="M7 9h10" />
+                        <path d="M7 14h10" />
+                    </svg>
+                    Log Formula
+                </h2>
                 <button class="modal-close" data-modal="formulaModal">×</button>
             </div>
             <div class="modal-body">
@@ -409,13 +524,35 @@
     <div class="modal" id="sleepModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>🌙 Start Sleep</h2>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    Start Sleep
+                </h2>
                 <button class="modal-close" data-modal="sleepModal">×</button>
             </div>
             <div class="modal-body">
                 <div class="sleep-type-selector">
-                    <button class="sleep-type-btn active" data-type="nap">😴 Nap</button>
-                    <button class="sleep-type-btn" data-type="night">🌙 Night Sleep</button>
+                    <button class="sleep-type-btn active" data-type="nap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                            height="16" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            <!-- Simple moon -->
+                        </svg>
+                        Nap
+                    </button>
+                    <button class="sleep-type-btn" data-type="night">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
+                            height="16" style="vertical-align: middle; margin-right: 4px;">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                            <!-- Use same icon or stars? -->
+                            <path d="M12 4v2" />
+                            <path d="M12 18v2" />
+                        </svg>
+                        Night Sleep
+                    </button>
                 </div>
                 <div class="form-group">
                     <label for="sleepLocation">Location (optional)</label>
@@ -471,15 +608,118 @@
         </div>
     </div>
 
+    <!-- Vitamin Modal -->
+    <div class="modal" id="vitaminModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path d="M12 2a5 5 0 0 1 5 5v10a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z" />
+                        <path d="M8 7h8" />
+                        <path d="M12 17v-4" />
+                        <path d="M10 13h4" />
+                    </svg>
+                    Log Vitamin
+                </h2>
+                <button class="modal-close" data-modal="vitaminModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Vitamin Name</label>
+                    <div class="choice-buttons">
+                        <button class="choice-btn active" data-vitamin="Vitamin D">Vitamin D</button>
+                        <button class="choice-btn" data-vitamin="Iron">Iron</button>
+                        <button class="choice-btn" data-vitamin="Multivitamin">Multivitamin</button>
+                        <button class="choice-btn" data-vitamin="Probiotic">Probiotic</button>
+                    </div>
+                    <input type="text" id="vitaminName" placeholder="Or type name..." style="margin-top: 8px;">
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="datetime-local" id="vitaminTime">
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="vitaminNotes" placeholder="Any notes..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="vitaminModal">Cancel</button>
+                <button class="primary-btn" id="confirmVitamin">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottle Choice Modal -->
+    <div class="modal" id="bottleChoiceModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path d="M9 2v2" />
+                        <rect x="7" y="4" width="10" height="16" rx="2" />
+                    </svg>
+                    Bottle content?
+                </h2>
+                <button class="modal-close" data-modal="bottleChoiceModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div style="display: grid; gap: 16px;">
+                    <button class="action-btn" id="choiceBreastMilk"
+                        style="background: var(--accent-feeding-light); flex-direction: row; gap: 16px;">
+                        <span class="action-icon" style="margin-bottom: 0;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32"
+                                height="32">
+                                <path
+                                    d="M12 21a9 9 0 0 1-9-9c0-3.87 2.4-7.1 5.7-8.4C9.6 3.2 10.8 3 12 3c1.2 0 2.4.2 3.3.6C18.6 4.9 21 8.1 21 12c0 .5-.1 1-.2 1.5" />
+                                <path d="M12 21a9.01 9.01 0 0 0 9-9" />
+                                <path d="M12 21v-9" />
+                                <path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                            </svg>
+                        </span>
+                        <span class="action-text">Breast Milk (Pumped)</span>
+                    </button>
+                    <button class="action-btn" id="choiceFormula"
+                        style="background: var(--accent-formula); flex-direction: row; gap: 16px;">
+                        <span class="action-icon" style="margin-bottom: 0;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32"
+                                height="32">
+                                <path d="M9 2v2" />
+                                <path d="M15 2v2" />
+                                <path d="M12 2v2" />
+                                <rect x="7" y="4" width="10" height="16" rx="2" />
+                                <path d="M7 9h10" />
+                                <path d="M7 14h10" />
+                            </svg>
+                        </span>
+                        <span class="action-text">Formula</span>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="bottleChoiceModal" style="width: 100%;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Active Sleep Indicator -->
     <div class="active-sleep-banner hidden" id="activeSleepBanner">
         <div class="sleep-banner-content">
-            <span class="sleep-banner-icon">💤</span>
+            <span class="sleep-banner-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </span>
             <div class="sleep-banner-info">
                 <span class="sleep-banner-label">Baby is sleeping</span>
                 <span class="sleep-banner-time" id="sleepBannerTime">00:00:00</span>
             </div>
-            <button class="wake-btn" id="wakeUpBtn">Wake Up</button>
+            <div class="sleep-banner-actions">
+                <button class="pause-sleep-btn" id="pauseSleepBtn">Pause</button>
+                <button class="wake-btn" id="wakeUpBtn">Wake Up</button>
+            </div>
         </div>
     </div>
 

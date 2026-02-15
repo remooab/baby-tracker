@@ -214,13 +214,18 @@ select {
 }
 
 .stat-icon {
-    font-size: 2rem;
     width: 48px;
     height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 12px;
+    color: var(--text-primary);
+}
+
+.stat-icon svg {
+    width: 24px;
+    height: 24px;
 }
 
 .feeding-stat .stat-icon {
@@ -314,7 +319,11 @@ select {
 }
 
 .action-icon {
-    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+    color: var(--text-primary);
 }
 
 .action-text {
@@ -332,7 +341,13 @@ select {
 }
 
 .formula-btn {
+    /* Make sure this style still exists if we use it elsewhere, or remove if unused */
     background: linear-gradient(135deg, #F0E2CC, var(--accent-formula));
+}
+
+.vitamin-btn {
+    background: linear-gradient(135deg, #FFEFBA, #F5D782);
+    /* Soft Yellow for Vitamins */
 }
 
 .sleep-btn {
@@ -396,6 +411,16 @@ select {
 
 .switch-btn {
     background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.pause-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.pause-btn.resuming {
+    background: var(--success);
     color: white;
 }
 
@@ -514,7 +539,6 @@ select {
 }
 
 .log-icon {
-    font-size: 1.5rem;
     width: 44px;
     height: 44px;
     display: flex;
@@ -522,6 +546,14 @@ select {
     justify-content: center;
     border-radius: 12px;
     flex-shrink: 0;
+}
+
+.log-icon svg {
+    width: 24px;
+    height: 24px;
+    stroke: currentColor;
+    stroke-width: 2;
+    fill: none;
 }
 
 .log-icon.breast {
@@ -543,6 +575,11 @@ select {
 .log-icon.night {
     background: linear-gradient(135deg, #3a4a6d, #5a6a8d);
     color: white;
+}
+
+.log-icon.vitamin {
+    background: #FFEFBA;
+    color: var(--text-primary);
 }
 
 .log-details {
@@ -784,6 +821,34 @@ select {
     padding: 24px;
 }
 
+.choice-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.choice-btn {
+    padding: 8px 16px;
+    border-radius: 9999px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.choice-btn.active {
+    background: var(--accent-primary);
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+.choice-btn:active {
+    transform: scale(0.95);
+}
+
 .modal-footer {
     display: flex;
     gap: 16px;
@@ -919,6 +984,26 @@ select {
     font-variant-numeric: tabular-nums;
 }
 
+.sleep-banner-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pause-sleep-btn {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.pause-sleep-btn.resuming {
+    background: var(--success);
+}
+
 .wake-btn {
     padding: 8px 16px;
     background: white;
@@ -1009,14 +1094,20 @@ select {
 }
 
 .auth-logo {
-    font-size: 3rem;
-    margin-bottom: 16px;
     background: var(--bg-primary);
     width: 80px;
     height: 80px;
-    line-height: 80px;
     border-radius: 50%;
     margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+}
+
+.auth-logo svg {
+    width: 40px;
+    height: 40px;
 }
 
 .auth-header h1 {

@@ -358,6 +358,15 @@ function initSelectors() {
             });
         });
     });
+
+    document.querySelectorAll('.choice-buttons').forEach(container => {
+        container.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+    });
 }
 
 // ===== Amount Buttons =====
@@ -450,7 +459,8 @@ function updateTodaySummary() {
     const todaySleeps = state.sleeps.filter(s => s.startTime >= startOfDay && s.startTime <= endOfDay);
     const totalSleepMs = todaySleeps.reduce((sum, s) => {
         const end = s.endTime || Date.now();
-        return sum + (end - s.startTime);
+        const duration = end - s.startTime - (s.totalPausedMs || 0);
+        return sum + Math.max(0, duration);
     }, 0);
     const sleepHours = Math.floor(totalSleepMs / 3600000);
     const sleepMins = Math.floor((totalSleepMs % 3600000) / 60000);
@@ -511,8 +521,21 @@ function hideActiveTimer() {
 
 function updateTimerDisplay() {
     if (!state.activeTimer) return;
-    const elapsed = Date.now() - state.activeTimer.startTime;
-    document.getElementById('activeTimerDisplay').textContent = formatTimerDuration(elapsed);
+
+    const now = Date.now();
+    let elapsed;
+
+    if (state.activeTimer.isPaused) {
+        elapsed = state.activeTimer.pauseStartTime - state.activeTimer.startTime - (state.activeTimer.totalPausedMs || 0);
+        document.getElementById('pauseTimerBtn').textContent = 'Resume';
+        document.getElementById('pauseTimerBtn').classList.add('resuming');
+    } else {
+        elapsed = now - state.activeTimer.startTime - (state.activeTimer.totalPausedMs || 0);
+        document.getElementById('pauseTimerBtn').textContent = 'Pause';
+        document.getElementById('pauseTimerBtn').classList.remove('resuming');
+    }
+
+    document.getElementById('activeTimerDisplay').textContent = formatTimerDuration(Math.max(0, elapsed));
 }
 
 // ===== Active Sleep Banner =====
@@ -541,8 +564,21 @@ function hideActiveSleepBanner() {
 
 function updateSleepBannerDisplay() {
     if (!state.activeSleep) return;
-    const elapsed = Date.now() - state.activeSleep.startTime;
-    document.getElementById('sleepBannerTime').textContent = formatTimerDuration(elapsed);
+
+    const now = Date.now();
+    let elapsed;
+
+    if (state.activeSleep.isPaused) {
+        elapsed = state.activeSleep.pauseStartTime - state.activeSleep.startTime - (state.activeSleep.totalPausedMs || 0);
+        document.getElementById('pauseSleepBtn').textContent = 'Resume';
+        document.getElementById('pauseSleepBtn').classList.add('resuming');
+    } else {
+        elapsed = now - state.activeSleep.startTime - (state.activeSleep.totalPausedMs || 0);
+        document.getElementById('pauseSleepBtn').textContent = 'Pause';
+        document.getElementById('pauseSleepBtn').classList.remove('resuming');
+    }
+
+    document.getElementById('sleepBannerTime').textContent = formatTimerDuration(Math.max(0, elapsed));
 }
 
 // ===== Breastfeeding =====
@@ -592,24 +628,63 @@ function initBreastfeeding() {
     document.getElementById('stopTimerBtn').addEventListener('click', async () => {
         if (!state.activeTimer) return;
 
-        const updated = {
-            ...state.activeTimer,
-            endTime: Date.now()
-        };
+        const now = Date.now();
+        const feeding = { ...state.activeTimer };
+
+        if (feeding.isPaused) {
+            // If stopped while paused, don't add more pause time, just use the pauseStartTime as endTime
+            feeding.endTime = feeding.pauseStartTime;
+        } else {
+            feeding.endTime = now;
+        }
+
+        // Calculate final duration for the toast
+        const totalDuration = feeding.endTime - feeding.startTime - (feeding.totalPausedMs || 0);
+
+        await saveDoc(COLLECTIONS.feedings, feeding);
+        showToast(`Feeding saved: ${formatDuration(totalDuration)}`);
+    });
+
+    document.getElementById('pauseTimerBtn').addEventListener('click', async () => {
+        if (!state.activeTimer) return;
+
+        const now = Date.now();
+        const updated = { ...state.activeTimer };
+
+        if (updated.isPaused) {
+            // Resume
+            updated.totalPausedMs = (updated.totalPausedMs || 0) + (now - updated.pauseStartTime);
+            updated.isPaused = false;
+            updated.pauseStartTime = null;
+        } else {
+            // Pause
+            updated.isPaused = true;
+            updated.pauseStartTime = now;
+        }
 
         await saveDoc(COLLECTIONS.feedings, updated);
-        const duration = formatDuration(updated.endTime - updated.startTime);
-        showToast(`Feeding saved: ${duration}`);
-
-        // Timer cleanup happens automatically via checkActiveTimers() which is called by listener
     });
 }
 
 // ===== Bottle =====
 function initBottle() {
+    // Top-level Bottle action opens the choice modal
     document.getElementById('logBottle').addEventListener('click', () => {
+        openModal('bottleChoiceModal');
+    });
+
+    // Handle "Breast Milk" choice
+    document.getElementById('choiceBreastMilk').addEventListener('click', () => {
+        closeModal('bottleChoiceModal');
         document.getElementById('bottleTime').value = getLocalDateTimeString();
         openModal('bottleModal');
+    });
+
+    // Handle "Formula" choice
+    document.getElementById('choiceFormula').addEventListener('click', () => {
+        closeModal('bottleChoiceModal');
+        document.getElementById('formulaTime').value = getLocalDateTimeString();
+        openModal('formulaModal');
     });
 
     document.getElementById('confirmBottle').addEventListener('click', async () => {
@@ -620,6 +695,7 @@ function initBottle() {
         const feeding = {
             id: generateId(),
             type: 'bottle',
+            subtype: 'breast_milk',
             startTime: time,
             endTime: time,
             amount: amount,
@@ -638,10 +714,7 @@ function initBottle() {
 
 // ===== Formula =====
 function initFormula() {
-    document.getElementById('logFormula').addEventListener('click', () => {
-        document.getElementById('formulaTime').value = getLocalDateTimeString();
-        openModal('formulaModal');
-    });
+    // Note: logFormula button is removed from main UI, but the modal logic remains for the choice flow
 
     document.getElementById('confirmFormula').addEventListener('click', async () => {
         const amount = parseInt(document.getElementById('formulaAmount').value) || 0;
@@ -651,7 +724,8 @@ function initFormula() {
 
         const feeding = {
             id: generateId(),
-            type: 'formula',
+            type: 'bottle',
+            subtype: 'formula',
             startTime: time,
             endTime: time,
             amount: amount,
@@ -667,6 +741,40 @@ function initFormula() {
         document.getElementById('formulaNotes').value = '';
 
         showToast(`Formula saved: ${amount}ml`);
+    });
+}
+
+// ===== Vitamins =====
+function initVitamin() {
+    document.getElementById('logVitamin').addEventListener('click', () => {
+        document.getElementById('vitaminTime').value = getLocalDateTimeString();
+        openModal('vitaminModal');
+    });
+
+    document.getElementById('confirmVitamin').addEventListener('click', async () => {
+        const name = document.getElementById('vitaminName').value ||
+            document.querySelector('#vitaminModal .choice-btn.active')?.dataset.vitamin ||
+            'Vitamin';
+        const time = new Date(document.getElementById('vitaminTime').value).getTime();
+        const notes = document.getElementById('vitaminNotes').value;
+
+        const entry = {
+            id: generateId(),
+            type: 'vitamin',
+            startTime: time,
+            endTime: time,
+            name: name,
+            notes: notes || null
+        };
+
+        await saveDoc(COLLECTIONS.feedings, entry); // Log vitamins in feedings for now (daily journal)
+        closeModal('vitaminModal');
+
+        // Reset
+        document.getElementById('vitaminName').value = '';
+        document.getElementById('vitaminNotes').value = '';
+
+        showToast(`${name} logged`);
     });
 }
 
@@ -703,14 +811,37 @@ function initSleep() {
     document.getElementById('wakeUpBtn').addEventListener('click', async () => {
         if (!state.activeSleep) return;
 
-        const updated = {
-            ...state.activeSleep,
-            endTime: Date.now()
-        };
+        const now = Date.now();
+        const sleep = { ...state.activeSleep };
+
+        if (sleep.isPaused) {
+            sleep.endTime = sleep.pauseStartTime;
+        } else {
+            sleep.endTime = now;
+        }
+
+        const totalDuration = sleep.endTime - sleep.startTime - (sleep.totalPausedMs || 0);
+
+        await saveDoc(COLLECTIONS.sleeps, sleep);
+        showToast(`Sleep saved: ${formatDuration(totalDuration)}`);
+    });
+
+    document.getElementById('pauseSleepBtn').addEventListener('click', async () => {
+        if (!state.activeSleep) return;
+
+        const now = Date.now();
+        const updated = { ...state.activeSleep };
+
+        if (updated.isPaused) {
+            updated.totalPausedMs = (updated.totalPausedMs || 0) + (now - updated.pauseStartTime);
+            updated.isPaused = false;
+            updated.pauseStartTime = null;
+        } else {
+            updated.isPaused = true;
+            updated.pauseStartTime = now;
+        }
 
         await saveDoc(COLLECTIONS.sleeps, updated);
-        const duration = formatDuration(updated.endTime - updated.startTime);
-        showToast(`Sleep saved: ${duration}`);
     });
 }
 
@@ -772,20 +903,50 @@ function renderFeedingLog() {
     }
 
     list.innerHTML = feedings.map(f => {
-        const icon = f.type === 'breast' ? '🤱' : f.type === 'bottle' ? '🍼' : '🧴';
-        const iconClass = f.type === 'breast' ? 'breast' : f.type === 'bottle' ? 'bottle' : 'formula';
-        const title = f.type === 'breast' ? 'Breastfeeding' : f.type === 'bottle' ? 'Bottle (pumped)' : 'Formula';
-
+        let iconSvg = '';
+        let iconClass = '';
+        let title = '';
         let subtitle = '';
-        if (f.type === 'breast' && f.side) subtitle = `${f.side.charAt(0).toUpperCase() + f.side.slice(1)} side`;
-        if (f.amount) subtitle = `${f.amount}ml`;
-        if (f.brand) subtitle += ` • ${f.brand}`;
+
+        if (f.type === 'breast') {
+            iconClass = 'breast';
+            title = 'Nursing';
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21a9 9 0 0 1-9-9c0-3.87 2.4-7.1 5.7-8.4C9.6 3.2 10.8 3 12 3c1.2 0 2.4.2 3.3.6C18.6 4.9 21 8.1 21 12c0 .5-.1 1-.2 1.5"/><path d="M12 21a9.01 9.01 0 0 0 9-9"/><path d="M12 21v-9"/><path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>`;
+            if (f.side) subtitle = `${f.side.charAt(0).toUpperCase() + f.side.slice(1)} side`;
+        } else if (f.type === 'bottle') {
+            iconClass = 'bottle';
+            title = 'Bottle';
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 2v2"/><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M7 9h10"/><path d="M7 14h10"/></svg>`;
+            subtitle = `${f.amount}ml`;
+            if (f.subtype === 'formula') {
+                title = 'Formula';
+                iconClass = 'formula'; // Use formula color style
+                if (f.brand) subtitle += ` • ${f.brand}`;
+            } else if (f.subtype === 'breast_milk') {
+                title = 'Breast Milk';
+            }
+            // Fallback for old data or generic bottle
+        } else if (f.type === 'formula') {
+            // Mapping old formula type to new look (same as bottle with formula subtype)
+            iconClass = 'formula';
+            title = 'Formula';
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 2v2"/><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M7 9h10"/><path d="M7 14h10"/></svg>`;
+            subtitle = `${f.amount}ml`;
+            if (f.brand) subtitle += ` • ${f.brand}`;
+        } else if (f.type === 'vitamin') {
+            iconClass = 'vitamin';
+            title = 'Vitamin';
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v10a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M8 7h8"/><path d="M12 17v-4"/><path d="M10 13h4"/></svg>`;
+            subtitle = f.notes || '';
+        }
 
         const duration = f.endTime && f.type === 'breast' ? formatDuration(f.endTime - f.startTime) : '';
 
         return `
             <div class="log-item" data-id="${f.id}" data-type="feeding">
-                <div class="log-icon ${iconClass}">${icon}</div>
+                <div class="log-icon ${iconClass}">
+                    ${iconSvg}
+                </div>
                 <div class="log-details">
                     <div class="log-title">${title}</div>
                     <div class="log-subtitle">${subtitle}</div>
@@ -943,16 +1104,34 @@ function renderSleepLog() {
     }
 
     list.innerHTML = sleeps.map(s => {
-        const icon = s.type === 'nap' ? '😴' : '🌙';
-        const iconClass = s.type;
-        const title = s.type === 'nap' ? 'Nap' : 'Night Sleep';
+        let iconSvg = '';
+        let iconClass = '';
+        let title = '';
+
+        if (s.type === 'nap') {
+            iconClass = 'nap';
+            title = 'Nap';
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+            // Actually let's use a Sun or Cloud for Nap to distinguish?
+            // Or just the same Moon but lighter color is handled by CSS. 
+            // Let's use a different icon for Nap to be fancy. A Cloud?
+            // <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+        } else {
+            iconClass = 'night'; // CSS handles color
+            title = 'Night Sleep';
+            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/><path d="M12 4v2"/><path d="M12 18v2"/></svg>`; // Moon with stars/sparkles
+        }
+
         const subtitle = s.location ? s.location.charAt(0).toUpperCase() + s.location.slice(1) : '';
         const duration = s.endTime ? formatDuration(s.endTime - s.startTime) : 'Ongoing...';
         const endTime = s.endTime ? ` - ${formatTime(s.endTime)}` : '';
 
         return `
             <div class="log-item" data-id="${s.id}" data-type="sleep">
-                <div class="log-icon ${iconClass}">${icon}</div>
+                <div class="log-icon ${iconClass}">
+                    ${iconSvg}
+                </div>
                 <div class="log-details">
                     <div class="log-title">${title}</div>
                     <div class="log-subtitle">${subtitle}</div>
@@ -1242,6 +1421,7 @@ async function init() {
         initBreastfeeding();
         initBottle();
         initFormula();
+        initVitamin();
         initSleep();
 
         initFeedingLog();
