@@ -4,8 +4,10 @@ import ActivityKit
 struct BabyTimerLiveAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var title: String
-        var elapsedSeconds: Int
+        var startDate: Date
+        var totalPausedSeconds: Int
         var paused: Bool
+        var pausedElapsedSeconds: Int   // snapshot when paused
     }
 
     var sessionId: String

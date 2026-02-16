@@ -46,7 +46,7 @@ const isNativeRuntime = (() => {
 })();
 
 const auth = isNativeRuntime
-    ? initializeAuth(app, { persistence: inMemoryPersistence })
+    ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
     : getAuth(app);
 
 function isNativeCapacitorApp() {
@@ -56,8 +56,6 @@ function isNativeCapacitorApp() {
 }
 
 async function configureAuthPersistence() {
-    if (isNativeCapacitorApp()) return;
-
     const timeoutMs = 2500;
     const withTimeout = (promise) => Promise.race([
         promise,
@@ -218,40 +216,74 @@ function getFeedingElapsedMs(feeding) {
     return Math.max(0, referenceEnd - feeding.startTime - (feeding.totalPausedMs || 0));
 }
 
+// Track last synced Live Activity state to avoid redundant updates
+let lastLiveActivitySyncKey = '';
+
 async function syncNativeLiveActivity() {
     const plugin = getNativeTimerLiveActivityPlugin();
     if (!isNativeCapacitorApp()) return;
     if (!plugin) return;
     if (!state.settings.liveActivityEnabled) {
-        try { await plugin.stop(); } catch (error) { console.warn(error); }
+        if (lastLiveActivitySyncKey !== '') {
+            try { await plugin.stop(); } catch (error) { console.warn(error); }
+            lastLiveActivitySyncKey = '';
+        }
         return;
     }
     if (!nativeCapabilities.supportsLiveActivities) return;
 
     try {
         if (state.activeTimer) {
-            await plugin.startOrUpdate({
-                sessionId: state.activeTimer.id,
-                timerKind: 'breast',
-                title: `Breastfeeding ${state.activeTimer.side?.toUpperCase() || ''}`.trim(),
-                elapsedSeconds: Math.floor(getFeedingElapsedMs(state.activeTimer) / 1000),
-                paused: !!state.activeTimer.isPaused
-            });
+            const paused = !!state.activeTimer.isPaused;
+            const totalPausedMs = state.activeTimer.totalPausedMs || 0;
+            const pausedElapsedMs = paused
+                ? (state.activeTimer.pauseStartTime - state.activeTimer.startTime - totalPausedMs)
+                : 0;
+            const syncKey = `breast:${state.activeTimer.id}:${paused}:${totalPausedMs}`;
+
+            if (syncKey !== lastLiveActivitySyncKey) {
+                await plugin.startOrUpdate({
+                    sessionId: state.activeTimer.id,
+                    timerKind: 'breast',
+                    title: `Breastfeeding ${state.activeTimer.side?.toUpperCase() || ''}`.trim(),
+                    startTimestamp: state.activeTimer.startTime,
+                    totalPausedMs: totalPausedMs,
+                    paused: paused,
+                    pausedElapsedMs: Math.max(0, pausedElapsedMs)
+                });
+                lastLiveActivitySyncKey = syncKey;
+            }
             return;
         }
 
         if (state.activeSleep) {
-            await plugin.startOrUpdate({
-                sessionId: state.activeSleep.id,
-                timerKind: state.activeSleep.type || 'sleep',
-                title: state.activeSleep.type === 'nap' ? 'Nap Timer' : 'Night Sleep Timer',
-                elapsedSeconds: Math.floor(getEffectiveSleepElapsedMs(state.activeSleep) / 1000),
-                paused: !!state.activeSleep.isPaused
-            });
+            const paused = !!state.activeSleep.isPaused;
+            const totalPausedMs = state.activeSleep.totalPausedMs || 0;
+            const pausedElapsedMs = paused
+                ? (state.activeSleep.pauseStartTime - state.activeSleep.startTime - totalPausedMs)
+                : 0;
+            const syncKey = `${state.activeSleep.type}:${state.activeSleep.id}:${paused}:${totalPausedMs}`;
+
+            if (syncKey !== lastLiveActivitySyncKey) {
+                await plugin.startOrUpdate({
+                    sessionId: state.activeSleep.id,
+                    timerKind: state.activeSleep.type || 'sleep',
+                    title: state.activeSleep.type === 'nap' ? 'Nap Timer' : 'Night Sleep',
+                    startTimestamp: state.activeSleep.startTime,
+                    totalPausedMs: totalPausedMs,
+                    paused: paused,
+                    pausedElapsedMs: Math.max(0, pausedElapsedMs)
+                });
+                lastLiveActivitySyncKey = syncKey;
+            }
             return;
         }
 
-        await plugin.stop();
+        // No active timer — stop Live Activity if one was running
+        if (lastLiveActivitySyncKey !== '') {
+            await plugin.stop();
+            lastLiveActivitySyncKey = '';
+        }
     } catch (error) {
         console.warn('Native Live Activity sync failed:', error);
     }
@@ -543,6 +575,7 @@ async function stopActiveBreastfeeding() {
 
     const totalDuration = feeding.endTime - feeding.startTime - (feeding.totalPausedMs || 0);
     await saveDoc(COLLECTIONS.feedings, feeding);
+    syncNativeLiveActivity();
     showToast(`Feeding saved: ${formatDuration(totalDuration)}`);
 }
 
@@ -562,6 +595,7 @@ async function togglePauseActiveBreastfeeding() {
     }
 
     await saveDoc(COLLECTIONS.feedings, updated);
+    syncNativeLiveActivity();
 }
 
 async function stopActiveSleep() {
@@ -578,6 +612,7 @@ async function stopActiveSleep() {
 
     const totalDuration = sleep.endTime - sleep.startTime - (sleep.totalPausedMs || 0);
     await saveDoc(COLLECTIONS.sleeps, sleep);
+    syncNativeLiveActivity();
     showToast(`Sleep saved: ${formatDuration(totalDuration)}`);
 }
 
@@ -597,6 +632,7 @@ async function togglePauseActiveSleep() {
     }
 
     await saveDoc(COLLECTIONS.sleeps, updated);
+    syncNativeLiveActivity();
 }
 
 function initServiceWorkerMessages() {
@@ -735,7 +771,6 @@ function evaluateThresholdAlerts() {
     if (!state.user) return;
     evaluateAwakeAlert();
     evaluateSleepAlert();
-    syncNativeLiveActivity();
     pollNativeLiveActivityCommand();
     handlePendingNotificationAction().catch((error) => {
         console.error('Pending action handler failed:', error);
@@ -1306,6 +1341,9 @@ function checkActiveTimers() {
         state.activeSleep = null;
         hideActiveSleepBanner();
     }
+
+    // Sync Live Activity whenever active timer state is re-evaluated
+    syncNativeLiveActivity();
 }
 
 // ===== Active Timer Logic =====
@@ -1420,7 +1458,10 @@ function initBreastfeeding() {
         // Optimistic UI update handled by listener... but wait, listener is fast. 
         // We just save.
         saveDoc(COLLECTIONS.feedings, feeding)
-            .then(() => showToast('Breastfeeding started'));
+            .then(() => {
+                showToast('Breastfeeding started');
+                syncNativeLiveActivity();
+            });
 
         closeModal('breastfeedingModal');
         document.getElementById('breastfeedingNotes').value = '';
@@ -1587,6 +1628,7 @@ function initSleep() {
         document.getElementById('sleepLocation').value = '';
 
         showToast('Sleep started');
+        syncNativeLiveActivity();
     });
 
     document.getElementById('wakeUpBtn').addEventListener('click', async () => {

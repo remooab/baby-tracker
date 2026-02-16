@@ -75,8 +75,10 @@ enum BabyTimerBridgeKeys {
 struct BabyTimerLiveAttributes: ActivityAttributes {
     public struct ContentState: Codable, Hashable {
         var title: String
-        var elapsedSeconds: Int
+        var startDate: Date
+        var totalPausedSeconds: Int
         var paused: Bool
+        var pausedElapsedSeconds: Int
     }
 
     var sessionId: String
@@ -90,12 +92,16 @@ final class BabyTimerLiveActivityManager {
 
     private init() {}
 
-    func startOrUpdate(sessionId: String, timerKind: String, title: String, elapsedSeconds: Int, paused: Bool) async -> Bool {
+    func startOrUpdate(sessionId: String, timerKind: String, title: String,
+                       startDate: Date, totalPausedSeconds: Int, paused: Bool,
+                       pausedElapsedSeconds: Int) async -> Bool {
         let attributes = BabyTimerLiveAttributes(sessionId: sessionId, timerKind: timerKind)
         let state = BabyTimerLiveAttributes.ContentState(
             title: title,
-            elapsedSeconds: elapsedSeconds,
-            paused: paused
+            startDate: startDate,
+            totalPausedSeconds: totalPausedSeconds,
+            paused: paused,
+            pausedElapsedSeconds: pausedElapsedSeconds
         )
 
         if let existing = activity, existing.attributes.sessionId == sessionId {
@@ -133,8 +139,10 @@ final class BabyTimerLiveActivityManager {
         guard let existing = activity else { return }
         let endState = BabyTimerLiveAttributes.ContentState(
             title: "Timer complete",
-            elapsedSeconds: 0,
-            paused: false
+            startDate: Date(),
+            totalPausedSeconds: 0,
+            paused: true,
+            pausedElapsedSeconds: 0
         )
 
         if #available(iOS 16.2, *) {
@@ -225,8 +233,12 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         let sessionId = call.getString("sessionId") ?? "session"
         let timerKind = call.getString("timerKind") ?? "timer"
         let title = call.getString("title") ?? "Baby Timer"
-        let elapsedSeconds = call.getInt("elapsedSeconds") ?? 0
+        let startTimestamp = call.getDouble("startTimestamp") ?? (Date().timeIntervalSince1970 * 1000)
+        let totalPausedMs = call.getInt("totalPausedMs") ?? 0
         let paused = call.getBool("paused") ?? false
+        let pausedElapsedMs = call.getInt("pausedElapsedMs") ?? 0
+
+        let startDate = Date(timeIntervalSince1970: startTimestamp / 1000.0)
 
         guard #available(iOS 16.1, *) else {
             call.resolve(["ok": false, "reason": "ios-version-too-low"])
@@ -238,8 +250,10 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                 sessionId: sessionId,
                 timerKind: timerKind,
                 title: title,
-                elapsedSeconds: elapsedSeconds,
-                paused: paused
+                startDate: startDate,
+                totalPausedSeconds: totalPausedMs / 1000,
+                paused: paused,
+                pausedElapsedSeconds: pausedElapsedMs / 1000
             )
 
             if success {
