@@ -344,7 +344,9 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         center.removePendingNotificationRequests(withIdentifiers: [tag])
         center.removeDeliveredNotifications(withIdentifiers: [tag])
 
-        let request = UNNotificationRequest(identifier: tag, content: content, trigger: nil)
+        // Use short delay trigger — nil trigger can silently drop in some iOS versions
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+        let request = UNNotificationRequest(identifier: tag, content: content, trigger: trigger)
         center.add(request) { error in
             if let error = error {
                 call.reject("send-local-notification-failed", nil, error)
