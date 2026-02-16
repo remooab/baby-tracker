@@ -39,14 +39,20 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const isNativeRuntime = typeof window !== 'undefined' && !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+const isNativeRuntime = (() => {
+    if (typeof window === 'undefined') return false;
+    if (window.location?.protocol === 'capacitor:') return true;
+    return !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+})();
 
 const auth = isNativeRuntime
     ? initializeAuth(app, { persistence: inMemoryPersistence })
     : getAuth(app);
 
 function isNativeCapacitorApp() {
-    return isNativeRuntime;
+    if (typeof window === 'undefined') return false;
+    if (window.location?.protocol === 'capacitor:') return true;
+    return isNativeRuntime || !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
 }
 
 async function configureAuthPersistence() {
@@ -135,24 +141,70 @@ const notificationRuntime = {
 let notificationCheckInterval = null;
 let pendingNotificationAction = null;
 
-const nativeTimerLiveActivity = (typeof window !== 'undefined' && window.Capacitor && typeof window.Capacitor.registerPlugin === 'function')
-    ? window.Capacitor.registerPlugin('TimerLiveActivity')
-    : null;
+let nativeTimerLiveActivity = null;
+
+function getNativeTimerLiveActivityPlugin() {
+    if (nativeTimerLiveActivity) return nativeTimerLiveActivity;
+    if (typeof window === 'undefined') return null;
+
+    // Method 1: Capacitor.registerPlugin (standard)
+    if (window.Capacitor && typeof window.Capacitor.registerPlugin === 'function') {
+        try {
+            nativeTimerLiveActivity = window.Capacitor.registerPlugin('TimerLiveActivity');
+            console.log('[NativeBridge] Plugin registered via registerPlugin');
+            return nativeTimerLiveActivity;
+        } catch (e) {
+            console.warn('[NativeBridge] registerPlugin failed:', e);
+        }
+    }
+
+    // Method 2: Capacitor.Plugins object (some Capacitor versions)
+    if (window.Capacitor?.Plugins?.TimerLiveActivity) {
+        nativeTimerLiveActivity = window.Capacitor.Plugins.TimerLiveActivity;
+        console.log('[NativeBridge] Plugin found via Capacitor.Plugins');
+        return nativeTimerLiveActivity;
+    }
+
+    // Method 3: Direct global (fallback)
+    if (window.TimerLiveActivity) {
+        nativeTimerLiveActivity = window.TimerLiveActivity;
+        console.log('[NativeBridge] Plugin found via window.TimerLiveActivity');
+        return nativeTimerLiveActivity;
+    }
+
+    console.warn('[NativeBridge] No plugin access method succeeded.',
+        'Capacitor exists:', !!window.Capacitor,
+        'registerPlugin:', typeof window.Capacitor?.registerPlugin,
+        'Plugins:', !!window.Capacitor?.Plugins,
+        'isNativePlatform:', typeof window.Capacitor?.isNativePlatform === 'function' ? window.Capacitor.isNativePlatform() : 'N/A'
+    );
+    return null;
+}
 
 const nativeCapabilities = {
     loaded: false,
     isNativeIOS: false,
     supportsLiveActivities: false,
+    supportsNativeNotifications: false,
     nativeSettingsAvailable: false
 };
 
+const nativeNotificationState = {
+    permission: 'default',
+    loaded: false
+};
+
+let lastNativeCommandPollAt = 0;
+
 async function loadNativeCapabilities() {
-    if (!isNativeCapacitorApp() || !nativeTimerLiveActivity) return;
+    const plugin = getNativeTimerLiveActivityPlugin();
+    if (!isNativeCapacitorApp() || !plugin) return;
     try {
-        const result = await nativeTimerLiveActivity.getPlatformCapabilities();
+        const result = await plugin.getPlatformCapabilities();
         nativeCapabilities.loaded = true;
         nativeCapabilities.isNativeIOS = !!result?.isNativeIOS;
         nativeCapabilities.supportsLiveActivities = !!result?.supportsLiveActivities;
+        nativeCapabilities.supportsNativeNotifications = result?.supportsNativeNotifications !== false;
         nativeCapabilities.nativeSettingsAvailable = !!result?.nativeSettingsAvailable;
     } catch (error) {
         console.warn('Native capabilities unavailable:', error);
@@ -167,17 +219,18 @@ function getFeedingElapsedMs(feeding) {
 }
 
 async function syncNativeLiveActivity() {
+    const plugin = getNativeTimerLiveActivityPlugin();
     if (!isNativeCapacitorApp()) return;
-    if (!nativeTimerLiveActivity) return;
+    if (!plugin) return;
     if (!state.settings.liveActivityEnabled) {
-        try { await nativeTimerLiveActivity.stop(); } catch (error) { console.warn(error); }
+        try { await plugin.stop(); } catch (error) { console.warn(error); }
         return;
     }
     if (!nativeCapabilities.supportsLiveActivities) return;
 
     try {
         if (state.activeTimer) {
-            await nativeTimerLiveActivity.startOrUpdate({
+            await plugin.startOrUpdate({
                 sessionId: state.activeTimer.id,
                 timerKind: 'breast',
                 title: `Breastfeeding ${state.activeTimer.side?.toUpperCase() || ''}`.trim(),
@@ -188,7 +241,7 @@ async function syncNativeLiveActivity() {
         }
 
         if (state.activeSleep) {
-            await nativeTimerLiveActivity.startOrUpdate({
+            await plugin.startOrUpdate({
                 sessionId: state.activeSleep.id,
                 timerKind: state.activeSleep.type || 'sleep',
                 title: state.activeSleep.type === 'nap' ? 'Nap Timer' : 'Night Sleep Timer',
@@ -198,9 +251,37 @@ async function syncNativeLiveActivity() {
             return;
         }
 
-        await nativeTimerLiveActivity.stop();
+        await plugin.stop();
     } catch (error) {
         console.warn('Native Live Activity sync failed:', error);
+    }
+}
+
+async function pollNativeLiveActivityCommand() {
+    const plugin = getNativeTimerLiveActivityPlugin();
+    if (!isNativeCapacitorApp()) return;
+    if (!plugin) return;
+    if (!nativeCapabilities.supportsLiveActivities) return;
+
+    const now = Date.now();
+    if (now - lastNativeCommandPollAt < 1500) return;
+    lastNativeCommandPollAt = now;
+
+    try {
+        const result = await plugin.fetchPendingCommand();
+        if (!result?.hasCommand) return;
+
+        if (result.action === 'toggle-live-pause') {
+            if (state.activeTimer) await togglePauseActiveBreastfeeding();
+            else if (state.activeSleep) await togglePauseActiveSleep();
+        }
+
+        if (result.action === 'stop-live-timer') {
+            if (state.activeTimer) await stopActiveBreastfeeding();
+            else if (state.activeSleep) await stopActiveSleep();
+        }
+    } catch (error) {
+        console.warn('Native command poll failed:', error);
     }
 }
 
@@ -238,25 +319,114 @@ async function saveUserSettings(partialSettings) {
 }
 
 function getNotificationPermission() {
+    if (isNativeCapacitorApp()) {
+        return nativeNotificationState.loaded ? nativeNotificationState.permission : 'default';
+    }
     if (!('Notification' in window)) return 'unsupported';
     return Notification.permission;
 }
 
-async function requestNotificationPermission() {
-    if (!('Notification' in window)) {
-        showToast('Notifications are not supported on this device');
-        return false;
+function supportsNativeNotificationBridge() {
+    const plugin = getNativeTimerLiveActivityPlugin();
+    return !!(
+        isNativeCapacitorApp() &&
+        plugin &&
+        (nativeCapabilities.supportsNativeNotifications || !nativeCapabilities.loaded)
+    );
+}
+
+async function refreshNotificationPermission() {
+    // Try native plugin first
+    if (isNativeCapacitorApp()) {
+        const plugin = getNativeTimerLiveActivityPlugin();
+        if (plugin) {
+            try {
+                const result = await plugin.getNotificationPermission();
+                nativeNotificationState.permission = result?.status || 'default';
+                nativeNotificationState.loaded = true;
+                return nativeNotificationState.permission;
+            } catch (error) {
+                console.warn('Failed to read native notification permission:', error);
+            }
+        }
+        // If native fails, don't override with 'unsupported' — keep default
+        if (!nativeNotificationState.loaded) {
+            nativeNotificationState.permission = 'default';
+            nativeNotificationState.loaded = true;
+        }
+        return nativeNotificationState.permission;
     }
 
-    const permission = await Notification.requestPermission();
-    const enabled = permission === 'granted';
-    await saveUserSettings({ notificationsEnabled: enabled });
-    showToast(enabled ? 'Notifications enabled' : 'Notifications not enabled');
-    return enabled;
+    // Web fallback
+    const permission = getNotificationPermission();
+    nativeNotificationState.permission = permission;
+    nativeNotificationState.loaded = true;
+    return permission;
+}
+
+async function requestNotificationPermission() {
+    // Strategy 1: Native Capacitor plugin (iOS/Android)
+    if (isNativeCapacitorApp()) {
+        const plugin = getNativeTimerLiveActivityPlugin();
+        if (plugin) {
+            try {
+                const result = await plugin.requestNotificationPermission();
+                const permission = result?.status || 'default';
+                nativeNotificationState.permission = permission;
+                nativeNotificationState.loaded = true;
+                const enabled = permission === 'granted';
+                await saveUserSettings({ notificationsEnabled: enabled });
+                showToast(enabled ? 'Notifications enabled' : 'Notifications denied — check iOS Settings');
+                return enabled;
+            } catch (error) {
+                console.warn('Native notification permission request failed:', error);
+                // Fall through to web API
+            }
+        } else {
+            console.warn('[Notifications] Native plugin not available, trying web API fallback');
+        }
+    }
+
+    // Strategy 2: Web Notification API
+    if ('Notification' in window) {
+        try {
+            const permission = await Notification.requestPermission();
+            const enabled = permission === 'granted';
+            nativeNotificationState.permission = permission;
+            nativeNotificationState.loaded = true;
+            await saveUserSettings({ notificationsEnabled: enabled });
+            showToast(enabled ? 'Notifications enabled' : 'Notifications not enabled');
+            return enabled;
+        } catch (error) {
+            console.warn('Web Notification.requestPermission failed:', error);
+        }
+    }
+
+    // Strategy 3: Just save the toggle and let the engine check permission at send time
+    await saveUserSettings({ notificationsEnabled: true });
+    showToast('Notifications preference saved');
+    return true;
 }
 
 async function showSystemNotification(title, body, tag, data = {}) {
     if (!state.settings.notificationsEnabled) return;
+
+    // Try native first
+    if (isNativeCapacitorApp()) {
+        const plugin = getNativeTimerLiveActivityPlugin();
+        if (plugin) {
+            try {
+                const permission = await refreshNotificationPermission();
+                if (permission !== 'granted') return;
+                await plugin.sendLocalNotification({ title, body, tag, data });
+                return;
+            } catch (error) {
+                console.warn('Native local notification failed:', error);
+            }
+        }
+    }
+
+    // Web fallback
     if (!('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
 
@@ -277,6 +447,18 @@ async function showSystemNotification(title, body, tag, data = {}) {
 }
 
 async function closeSystemNotificationsByTag(tag) {
+    if (isNativeCapacitorApp()) {
+        const plugin = getNativeTimerLiveActivityPlugin();
+        if (plugin) {
+            try {
+                await plugin.clearLocalNotification({ tag });
+                return;
+            } catch (error) {
+                console.warn('Native local notification clear failed:', error);
+            }
+        }
+    }
+
     if (!('serviceWorker' in navigator)) return;
     const registration = await navigator.serviceWorker.ready;
     const notifications = await registration.getNotifications({ tag });
@@ -284,6 +466,8 @@ async function closeSystemNotificationsByTag(tag) {
 }
 
 async function updateActiveSessionNotification() {
+    if (isNativeCapacitorApp()) return;
+
     if (!state.settings.notificationsEnabled || !state.settings.liveActivityEnabled) {
         await closeSystemNotificationsByTag('active-session');
         return;
@@ -552,6 +736,7 @@ function evaluateThresholdAlerts() {
     evaluateAwakeAlert();
     evaluateSleepAlert();
     syncNativeLiveActivity();
+    pollNativeLiveActivityCommand();
     handlePendingNotificationAction().catch((error) => {
         console.error('Pending action handler failed:', error);
     });
@@ -710,15 +895,93 @@ function getLocalDateTimeString(date = new Date()) {
 
 // ===== Toast Notification =====
 function showToast(message) {
+    const asText = String(message || '').toLowerCase();
+    let tone = 'info';
+    if (asText.includes('error') || asText.includes('failed') || asText.includes('invalid') || asText.includes('not supported') || asText.includes('blocked')) {
+        tone = 'error';
+    } else if (asText.includes('saved') || asText.includes('enabled') || asText.includes('welcome') || asText.includes('sent') || asText.includes('started')) {
+        tone = 'success';
+    }
+
     const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toastMessage');
+    if (!toast || !toastMessage) return;
+
+    toast.classList.remove('toast-info', 'toast-success', 'toast-error');
+    toast.classList.add(`toast-${tone}`);
     toastMessage.textContent = message;
+
+    if (showToast._timer) {
+        clearTimeout(showToast._timer);
+    }
+
     toast.classList.remove('hidden');
     toast.classList.add('show');
-    setTimeout(() => {
+
+    showToast._timer = setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.classList.add('hidden'), 250);
     }, 2500);
+}
+
+function showConfirmDialog({
+    title = 'Please confirm',
+    message = 'Are you sure?',
+    confirmText = 'Continue',
+    cancelText = 'Cancel',
+    destructive = false
+} = {}) {
+    const backdrop = document.getElementById('appDialogBackdrop');
+    const titleEl = document.getElementById('appDialogTitle');
+    const messageEl = document.getElementById('appDialogMessage');
+    const confirmBtn = document.getElementById('appDialogConfirm');
+    const cancelBtn = document.getElementById('appDialogCancel');
+
+    if (!backdrop || !titleEl || !messageEl || !confirmBtn || !cancelBtn) {
+        return Promise.resolve(window.confirm(message));
+    }
+
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+
+    confirmBtn.classList.toggle('danger-btn', destructive);
+    confirmBtn.classList.toggle('primary-btn', !destructive);
+
+    backdrop.classList.remove('hidden');
+    requestAnimationFrame(() => backdrop.classList.add('active'));
+
+    return new Promise((resolve) => {
+        const close = (result) => {
+            backdrop.classList.remove('active');
+            setTimeout(() => backdrop.classList.add('hidden'), 180);
+            cleanup();
+            resolve(result);
+        };
+
+        const onConfirm = () => close(true);
+        const onCancel = () => close(false);
+        const onBackdrop = (event) => {
+            if (event.target === backdrop) close(false);
+        };
+
+        const onEscape = (event) => {
+            if (event.key === 'Escape') close(false);
+        };
+
+        const cleanup = () => {
+            confirmBtn.removeEventListener('click', onConfirm);
+            cancelBtn.removeEventListener('click', onCancel);
+            backdrop.removeEventListener('click', onBackdrop);
+            document.removeEventListener('keydown', onEscape);
+        };
+
+        confirmBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        backdrop.addEventListener('click', onBackdrop);
+        document.addEventListener('keydown', onEscape);
+    });
 }
 
 // ===== Real-time Listeners =====
@@ -923,7 +1186,10 @@ function updateSettingsUI() {
     document.getElementById('nightSleepAlertEnabled').checked = settings.nightSleepAlertEnabled;
     document.getElementById('nightSleepAlertMinutes').value = settings.nightSleepAlertMinutes;
 
-    const permission = getNotificationPermission();
+    // Use native permission state when available, otherwise fall back to web API
+    const permission = (isNativeCapacitorApp() && nativeNotificationState.loaded)
+        ? nativeNotificationState.permission
+        : getNotificationPermission();
     const enableBtn = document.getElementById('enableNotifications');
     const permissionStatus = document.getElementById('notificationPermissionStatus');
     const nativeSettingsButton = document.getElementById('openNativeSettingsBtn');
@@ -932,23 +1198,24 @@ function updateSettingsUI() {
         nativeSettingsButton.classList.toggle('hidden', !nativeCapabilities.nativeSettingsAvailable);
     }
 
-    if (permission === 'unsupported') {
+    enableBtn.disabled = false;
+    if (permission === 'unsupported' && !isNativeCapacitorApp()) {
         enableBtn.textContent = 'Notifications not supported';
         enableBtn.disabled = true;
         permissionStatus.textContent = 'Unsupported on this device';
         return;
     }
 
-    enableBtn.disabled = false;
     if (permission === 'granted') {
-        enableBtn.textContent = settings.notificationsEnabled ? 'Permission Granted' : 'Enable Notifications';
+        enableBtn.textContent = 'Permission Granted';
+        enableBtn.disabled = true;
         permissionStatus.textContent = 'Granted';
     } else if (permission === 'denied') {
-        enableBtn.textContent = 'Notifications Blocked in Browser';
-        permissionStatus.textContent = 'Blocked';
+        enableBtn.textContent = 'Open Settings to Re-enable';
+        permissionStatus.textContent = 'Denied — open iOS Settings';
     } else {
         enableBtn.textContent = 'Enable Notifications';
-        permissionStatus.textContent = 'Not requested';
+        permissionStatus.textContent = 'Not yet requested';
     }
 }
 
@@ -1539,7 +1806,13 @@ function initEditFeeding() {
     });
 
     document.getElementById('deleteFeedingBtn').addEventListener('click', async () => {
-        if (confirm('Delete this feeding entry?')) {
+        const shouldDelete = await showConfirmDialog({
+            title: 'Delete Feeding',
+            message: 'Delete this feeding entry? This cannot be undone.',
+            confirmText: 'Delete',
+            destructive: true
+        });
+        if (shouldDelete) {
             await removeDoc(COLLECTIONS.feedings, state.editingId);
             closeModal('editFeedingModal');
             showToast('Feeding deleted');
@@ -1708,7 +1981,13 @@ function initEditSleep() {
     });
 
     document.getElementById('deleteSleepBtn').addEventListener('click', async () => {
-        if (confirm('Delete this sleep entry?')) {
+        const shouldDelete = await showConfirmDialog({
+            title: 'Delete Sleep Entry',
+            message: 'Delete this sleep entry? This cannot be undone.',
+            confirmText: 'Delete',
+            destructive: true
+        });
+        if (shouldDelete) {
             await removeDoc(COLLECTIONS.sleeps, state.editingId);
             closeModal('editSleepModal');
             showToast('Sleep deleted');
@@ -1740,11 +2019,13 @@ function initSettings() {
 
     document.getElementById('enableNotifications').addEventListener('click', async () => {
         await requestNotificationPermission();
+        await refreshNotificationPermission();
         updateSettingsUI();
     });
 
     document.getElementById('testNotificationBtn').addEventListener('click', async () => {
-        if (getNotificationPermission() !== 'granted') {
+        const permission = await refreshNotificationPermission();
+        if (permission !== 'granted') {
             showToast('Please enable notifications first');
             return;
         }
@@ -1768,10 +2049,8 @@ function initSettings() {
         const nightSleepAlertEnabled = document.getElementById('nightSleepAlertEnabled').checked;
         const nightSleepAlertMinutes = clampMinutes(document.getElementById('nightSleepAlertMinutes').value, DEFAULT_SETTINGS.nightSleepAlertMinutes);
 
-        const permissionGranted = getNotificationPermission() === 'granted';
-
         await saveUserSettings({
-            notificationsEnabled: notificationsEnabled && permissionGranted,
+            notificationsEnabled,
             liveActivityEnabled,
             awakeAlertEnabled,
             awakeAlertMinutes,
@@ -1788,12 +2067,13 @@ function initSettings() {
     const openNativeSettingsBtn = document.getElementById('openNativeSettingsBtn');
     if (openNativeSettingsBtn) {
         openNativeSettingsBtn.addEventListener('click', async () => {
-            if (!nativeTimerLiveActivity) {
+            const plugin = getNativeTimerLiveActivityPlugin();
+            if (!plugin) {
                 showToast('Native settings are only available on iOS app');
                 return;
             }
             try {
-                await nativeTimerLiveActivity.openNativeSettings();
+                await plugin.openNativeSettings();
             } catch (error) {
                 console.warn('Failed to open native settings:', error);
                 showToast('Could not open native settings');
@@ -1832,12 +2112,17 @@ function initSettings() {
 
     // Clear data
     document.getElementById('clearData').addEventListener('click', async () => {
-        if (confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
-            if (confirm('Really delete everything?')) {
-                await clearCollection(COLLECTIONS.feedings);
-                await clearCollection(COLLECTIONS.sleeps);
-                showToast('All data cleared');
-            }
+        const shouldClear = await showConfirmDialog({
+            title: 'Clear All Data',
+            message: 'This permanently deletes all feeding and sleep records.',
+            confirmText: 'Delete All',
+            destructive: true
+        });
+
+        if (shouldClear) {
+            await clearCollection(COLLECTIONS.feedings);
+            await clearCollection(COLLECTIONS.sleeps);
+            showToast('All data cleared');
         }
     });
 }
@@ -1888,14 +2173,19 @@ function initAuth() {
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        if (confirm('Are you sure you want to log out?')) {
+        showConfirmDialog({
+            title: 'Log Out',
+            message: 'Are you sure you want to log out?',
+            confirmText: 'Log Out'
+        }).then((shouldLogout) => {
+            if (!shouldLogout) return;
             signOut(auth).then(() => {
                 showToast('Logged out');
             }).catch((error) => {
                 showToast('Error logging out');
                 console.error(error);
             });
-        }
+        });
     });
 }
 
@@ -1994,7 +2284,22 @@ async function init() {
 
         // Always wire auth UI immediately; persistence setup runs in background.
         initAuth();
+
+        // Try to load native capabilities immediately; retry after delay if bridge isn't ready
         await loadNativeCapabilities();
+        if (isNativeCapacitorApp() && !nativeCapabilities.loaded) {
+            console.log('[NativeBridge] Retrying capabilities in 500ms...');
+            setTimeout(async () => {
+                nativeTimerLiveActivity = null; // force re-lookup
+                await loadNativeCapabilities();
+                if (nativeCapabilities.loaded) {
+                    console.log('[NativeBridge] Retry succeeded');
+                    await refreshNotificationPermission();
+                    updateSettingsUI();
+                }
+            }, 500);
+        }
+
         configureAuthPersistence().catch((error) => {
             console.warn('Auth persistence setup failed:', error);
         });
@@ -2022,6 +2327,8 @@ async function init() {
         initEditSleep();
 
         initSettings();
+        await refreshNotificationPermission();
+        updateSettingsUI();
         startNotificationEngine();
 
         // Initial render will happen when listeners fire

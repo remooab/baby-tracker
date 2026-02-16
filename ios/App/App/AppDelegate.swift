@@ -55,6 +55,21 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 extension AppDelegate: UNUserNotificationCenterDelegate {}
 
+extension AppDelegate {
+    public func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                       willPresent notification: UNNotification,
+                                       withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .sound, .badge, .list])
+    }
+}
+
+enum BabyTimerBridgeKeys {
+    static let appGroupId = "group.com.trueinspo.babytracker"
+    static let activeSessionId = "liveActivity.sessionId"
+    static let activeTimerKind = "liveActivity.timerKind"
+    static let pendingAction = "liveActivity.pendingAction"
+}
+
 #if canImport(ActivityKit)
 @available(iOS 16.1, *)
 struct BabyTimerLiveAttributes: ActivityAttributes {
@@ -194,8 +209,17 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "startOrUpdate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openNativeSettings", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getPlatformCapabilities", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getPlatformCapabilities", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "fetchPendingCommand", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getNotificationPermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestNotificationPermission", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "sendLocalNotification", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearLocalNotification", returnType: CAPPluginReturnPromise)
     ]
+
+    private var bridgeDefaults: UserDefaults? {
+        return UserDefaults(suiteName: BabyTimerBridgeKeys.appGroupId)
+    }
 
     @objc func startOrUpdate(_ call: CAPPluginCall) {
         let sessionId = call.getString("sessionId") ?? "session"
@@ -217,6 +241,12 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                 elapsedSeconds: elapsedSeconds,
                 paused: paused
             )
+
+            if success {
+                bridgeDefaults?.set(sessionId, forKey: BabyTimerBridgeKeys.activeSessionId)
+                bridgeDefaults?.set(timerKind, forKey: BabyTimerBridgeKeys.activeTimerKind)
+            }
+
             call.resolve(["ok": success])
         }
     }
@@ -229,6 +259,8 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
         Task {
             await BabyTimerLiveActivityManager.shared.stop()
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.activeSessionId)
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.activeTimerKind)
             call.resolve(["ok": true])
         }
     }
@@ -251,7 +283,104 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve([
             "isNativeIOS": true,
             "supportsLiveActivities": supportsLiveActivities,
+            "supportsNativeNotifications": true,
             "nativeSettingsAvailable": true
         ])
+    }
+
+    @objc func fetchPendingCommand(_ call: CAPPluginCall) {
+        guard let defaults = bridgeDefaults else {
+            call.resolve(["hasCommand": false])
+            return
+        }
+
+        guard let action = defaults.string(forKey: BabyTimerBridgeKeys.pendingAction) else {
+            call.resolve(["hasCommand": false])
+            return
+        }
+
+        defaults.removeObject(forKey: BabyTimerBridgeKeys.pendingAction)
+
+        call.resolve([
+            "hasCommand": true,
+            "action": action,
+            "sessionId": defaults.string(forKey: BabyTimerBridgeKeys.activeSessionId) ?? "",
+            "timerKind": defaults.string(forKey: BabyTimerBridgeKeys.activeTimerKind) ?? ""
+        ])
+    }
+
+    @objc func getNotificationPermission(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            call.resolve(["status": Self.mapNotificationStatus(settings.authorizationStatus)])
+        }
+    }
+
+    @objc func requestNotificationPermission(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, error in
+            if let error = error {
+                call.reject("notification-permission-error", nil, error)
+                return
+            }
+
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                call.resolve(["status": Self.mapNotificationStatus(settings.authorizationStatus)])
+            }
+        }
+    }
+
+    @objc func sendLocalNotification(_ call: CAPPluginCall) {
+        let title = call.getString("title") ?? "Baby Tracker"
+        let body = call.getString("body") ?? ""
+        let tag = call.getString("tag") ?? UUID().uuidString
+        let userInfo = call.getObject("data") ?? [:]
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.userInfo = userInfo
+
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [tag])
+        center.removeDeliveredNotifications(withIdentifiers: [tag])
+
+        let request = UNNotificationRequest(identifier: tag, content: content, trigger: nil)
+        center.add(request) { error in
+            if let error = error {
+                call.reject("send-local-notification-failed", nil, error)
+                return
+            }
+            call.resolve(["ok": true])
+        }
+    }
+
+    @objc func clearLocalNotification(_ call: CAPPluginCall) {
+        let tag = call.getString("tag") ?? ""
+        guard !tag.isEmpty else {
+            call.resolve(["ok": true])
+            return
+        }
+
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [tag])
+        center.removeDeliveredNotifications(withIdentifiers: [tag])
+        call.resolve(["ok": true])
+    }
+
+    private static func mapNotificationStatus(_ status: UNAuthorizationStatus) -> String {
+        switch status {
+        case .authorized:
+            return "granted"
+        case .provisional:
+            return "granted"
+        case .ephemeral:
+            return "granted"
+        case .denied:
+            return "denied"
+        case .notDetermined:
+            return "default"
+        @unknown default:
+            return "default"
+        }
     }
 }

@@ -349,7 +349,7 @@
             <header class="screen-header">
                 <h1>Settings</h1>
             </header>
-            <main class="settings-content">
+            <main class="settings-content settings-shell">
                 <section class="settings-section">
                     <h2 class="settings-title">Baby Information</h2>
                     <div class="form-group">
@@ -795,6 +795,18 @@
     <!-- Toast Notification -->
     <div class="toast hidden" id="toast">
         <span id="toastMessage"></span>
+    </div>
+
+    <!-- App Confirmation Dialog -->
+    <div class="dialog-backdrop hidden" id="appDialogBackdrop">
+        <div class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle">
+            <h3 id="appDialogTitle">Please confirm</h3>
+            <p id="appDialogMessage">Are you sure?</p>
+            <div class="dialog-actions">
+                <button class="secondary-btn" id="appDialogCancel">Cancel</button>
+                <button class="primary-btn" id="appDialogConfirm">Continue</button>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="app.js"></script>

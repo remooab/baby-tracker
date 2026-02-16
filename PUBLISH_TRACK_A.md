@@ -111,3 +111,28 @@ For true iOS Live Activities:
 - Add App Intents for Pause/Resume/Stop actions.
 - Keep the current native bridge + web notifications as fallbacks.
 - Ensure `NSSupportsLiveActivities` is present in `Info.plist` and deployment target is iOS 16.1+.
+
+## 11) Xcode hookup for new Live Activity scaffold
+
+The repo now includes scaffold files in `ios/App/BabyTimerLiveActivityExtension/` and bridge support in `ios/App/App/AppDelegate.swift`.
+
+Manual Xcode steps:
+
+1. Open `ios/App/App.xcworkspace`.
+2. Add target: `File` -> `New` -> `Target...` -> `Widget Extension`.
+3. Name target `BabyTimerLiveActivityExtension`.
+4. Replace generated files with:
+   - `BabyTimerLiveActivityBundle.swift`
+   - `BabyTimerLiveActivityWidget.swift`
+   - `BabyTimerLiveActivityAttributes.swift`
+   - `TimerControlsIntents.swift`
+5. In both `App` target and extension target:
+   - Add `App Groups` capability.
+   - Add group id: `group.com.trueinspo.babytracker`.
+6. In `App` target:
+   - Add `Push Notifications` capability.
+   - Add `Background Modes` -> `Remote notifications`.
+7. Set deployment targets:
+   - App target iOS 16.1+
+   - Extension target iOS 16.1+
+8. Build and run app target, then start a timer and verify Live Activity appears.
