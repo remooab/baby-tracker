@@ -68,6 +68,13 @@ enum BabyTimerBridgeKeys {
     static let activeSessionId = "liveActivity.sessionId"
     static let activeTimerKind = "liveActivity.timerKind"
     static let pendingAction = "liveActivity.pendingAction"
+    // Timer state for intent access
+    static let stateStartDate = "liveActivity.state.startDate"
+    static let stateTotalPausedSec = "liveActivity.state.totalPausedSeconds"
+    static let statePaused = "liveActivity.state.paused"
+    static let statePausedElapsedSec = "liveActivity.state.pausedElapsedSeconds"
+    static let statePausedAt = "liveActivity.state.pausedAt"
+    static let stateTitle = "liveActivity.state.title"
 }
 
 #if canImport(ActivityKit)
@@ -292,6 +299,17 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             if success {
                 bridgeDefaults?.set(sessionId, forKey: BabyTimerBridgeKeys.activeSessionId)
                 bridgeDefaults?.set(timerKind, forKey: BabyTimerBridgeKeys.activeTimerKind)
+                // Store timer state for intent access
+                bridgeDefaults?.set(startDate.timeIntervalSince1970, forKey: BabyTimerBridgeKeys.stateStartDate)
+                bridgeDefaults?.set(totalPausedMs / 1000, forKey: BabyTimerBridgeKeys.stateTotalPausedSec)
+                bridgeDefaults?.set(paused, forKey: BabyTimerBridgeKeys.statePaused)
+                bridgeDefaults?.set(pausedElapsedMs / 1000, forKey: BabyTimerBridgeKeys.statePausedElapsedSec)
+                bridgeDefaults?.set(title, forKey: BabyTimerBridgeKeys.stateTitle)
+                if paused {
+                    bridgeDefaults?.set(Date().timeIntervalSince1970, forKey: BabyTimerBridgeKeys.statePausedAt)
+                } else {
+                    bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePausedAt)
+                }
             }
 
             call.resolve(["ok": success])
@@ -308,6 +326,13 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             await BabyTimerLiveActivityManager.shared.stop()
             bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.activeSessionId)
             bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.activeTimerKind)
+            // Clear timer state
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.stateStartDate)
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.stateTotalPausedSec)
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePaused)
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePausedElapsedSec)
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePausedAt)
+            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.stateTitle)
             call.resolve(["ok": true])
         }
     }
