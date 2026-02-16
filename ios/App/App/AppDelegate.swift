@@ -90,7 +90,37 @@ final class BabyTimerLiveActivityManager {
     static let shared = BabyTimerLiveActivityManager()
     private var activity: Activity<BabyTimerLiveAttributes>?
 
-    private init() {}
+    private init() {
+        // Recover any existing Live Activity from a previous app session
+        recoverExistingActivity()
+    }
+
+    private func recoverExistingActivity() {
+        let existing = Activity<BabyTimerLiveAttributes>.activities
+        if let first = existing.first {
+            activity = first
+            print("[LiveActivity] Recovered existing activity: \(first.id)")
+        }
+        // End any extras beyond the first
+        if existing.count > 1 {
+            Task {
+                for extra in existing.dropFirst() {
+                    let endState = BabyTimerLiveAttributes.ContentState(
+                        title: "Timer complete",
+                        startDate: Date(),
+                        totalPausedSeconds: 0,
+                        paused: true,
+                        pausedElapsedSeconds: 0
+                    )
+                    if #available(iOS 16.2, *) {
+                        await extra.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
+                    } else {
+                        await extra.end(using: endState, dismissalPolicy: .immediate)
+                    }
+                }
+            }
+        }
+    }
 
     func startOrUpdate(sessionId: String, timerKind: String, title: String,
                        startDate: Date, totalPausedSeconds: Int, paused: Bool,
@@ -136,7 +166,8 @@ final class BabyTimerLiveActivityManager {
     }
 
     func stop() async {
-        guard let existing = activity else { return }
+        // End ALL existing activities (including orphaned ones from previous sessions)
+        let allActivities = Activity<BabyTimerLiveAttributes>.activities
         let endState = BabyTimerLiveAttributes.ContentState(
             title: "Timer complete",
             startDate: Date(),
@@ -145,10 +176,12 @@ final class BabyTimerLiveActivityManager {
             pausedElapsedSeconds: 0
         )
 
-        if #available(iOS 16.2, *) {
-            await existing.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
-        } else {
-            await existing.end(using: endState, dismissalPolicy: .immediate)
+        for act in allActivities {
+            if #available(iOS 16.2, *) {
+                await act.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
+            } else {
+                await act.end(using: endState, dismissalPolicy: .immediate)
+            }
         }
         activity = nil
     }

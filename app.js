@@ -296,7 +296,7 @@ async function pollNativeLiveActivityCommand() {
     if (!nativeCapabilities.supportsLiveActivities) return;
 
     const now = Date.now();
-    if (now - lastNativeCommandPollAt < 1500) return;
+    if (now - lastNativeCommandPollAt < 800) return;
     lastNativeCommandPollAt = now;
 
     try {
@@ -312,6 +312,10 @@ async function pollNativeLiveActivityCommand() {
             if (state.activeTimer) await stopActiveBreastfeeding();
             else if (state.activeSleep) await stopActiveSleep();
         }
+
+        // Force immediate Live Activity update after processing command
+        lastLiveActivitySyncKey = '';
+        await syncNativeLiveActivity();
     } catch (error) {
         console.warn('Native command poll failed:', error);
     }
@@ -782,8 +786,26 @@ function evaluateThresholdAlerts() {
 
 function startNotificationEngine() {
     if (notificationCheckInterval) clearInterval(notificationCheckInterval);
-    notificationCheckInterval = setInterval(evaluateThresholdAlerts, 15000);
+    notificationCheckInterval = setInterval(evaluateThresholdAlerts, 5000);
     evaluateThresholdAlerts();
+
+    // Poll immediately when app returns to foreground (for Live Activity button presses)
+    if (isNativeCapacitorApp()) {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                lastNativeCommandPollAt = 0;
+                lastLiveActivitySyncKey = '';
+                pollNativeLiveActivityCommand();
+                syncNativeLiveActivity();
+            }
+        });
+        window.addEventListener('resume', () => {
+            lastNativeCommandPollAt = 0;
+            lastLiveActivitySyncKey = '';
+            pollNativeLiveActivityCommand();
+            syncNativeLiveActivity();
+        });
+    }
 }
 
 async function registerServiceWorker() {
@@ -2175,6 +2197,15 @@ function initAuth() {
 
     let signOutDebounce = null;
 
+    const loadingScreen = document.getElementById('loadingScreen');
+
+    function hideLoadingScreen() {
+        if (loadingScreen) {
+            loadingScreen.classList.add('hidden');
+            setTimeout(() => { loadingScreen.style.display = 'none'; }, 350);
+        }
+    }
+
     onAuthStateChanged(auth, (user) => {
         if (signOutDebounce) {
             clearTimeout(signOutDebounce);
@@ -2187,6 +2218,7 @@ function initAuth() {
             console.log("User signed in:", user.email);
             document.getElementById('authContainer').classList.add('hidden');
             document.getElementById('app').classList.remove('hidden');
+            hideLoadingScreen();
 
             // Update profile info
             const emailDisplay = document.getElementById('userEmailDisplay');
@@ -2201,6 +2233,7 @@ function initAuth() {
                     state.user = currentUser;
                     document.getElementById('authContainer').classList.add('hidden');
                     document.getElementById('app').classList.remove('hidden');
+                    hideLoadingScreen();
                     initListeners();
                     return;
                 }
@@ -2208,6 +2241,7 @@ function initAuth() {
                 console.log("User signed out");
                 document.getElementById('authContainer').classList.remove('hidden');
                 document.getElementById('app').classList.add('hidden');
+                hideLoadingScreen();
                 initListeners(); // This will clear the state because !state.user
             }, 1200);
         }
