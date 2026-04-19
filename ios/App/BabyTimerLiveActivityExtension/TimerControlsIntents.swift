@@ -2,77 +2,69 @@ import ActivityKit
 import AppIntents
 import Foundation
 
-private enum BabyTimerIntentBridge {
-    static let appGroupId = "group.com.trueinspo.babytracker"
-    static let pendingActionKey = "liveActivity.pendingAction"
-    // Timer state stored by the main app plugin for intent access
-    static let stateStartDate = "liveActivity.state.startDate"
-    static let stateTotalPausedSec = "liveActivity.state.totalPausedSeconds"
-    static let statePaused = "liveActivity.state.paused"
-    static let statePausedElapsedSec = "liveActivity.state.pausedElapsedSeconds"
-    static let statePausedAt = "liveActivity.state.pausedAt"
-    static let stateTitle = "liveActivity.state.title"
-}
+private let kAppGroupId = "group.com.trueinspo.babytracker"
+private let kPendingActionKey = "liveActivity.pendingAction"
 
-private func sharedDefaults() -> UserDefaults? {
-    let defaults = UserDefaults(suiteName: BabyTimerIntentBridge.appGroupId)
-    defaults?.synchronize() // Ensure we read the latest cross-process data
-    return defaults
-}
+// State keys (best-effort backup, written by intents for main app)
+private let kStatePaused = "liveActivity.state.paused"
+private let kStateTotalPausedSec = "liveActivity.state.totalPausedSeconds"
+private let kStatePausedElapsedSec = "liveActivity.state.pausedElapsedSeconds"
+private let kStatePausedAt = "liveActivity.state.pausedAt"
 
 @available(iOS 17.0, *)
 struct PauseResumeTimerIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Pause/Resume Timer"
 
     func perform() async throws -> some IntentResult {
-        guard let defaults = sharedDefaults() else { return .result() }
-
-        let wasPaused = defaults.bool(forKey: BabyTimerIntentBridge.statePaused)
-        let startDateEpoch = defaults.double(forKey: BabyTimerIntentBridge.stateStartDate)
-        let startDate = Date(timeIntervalSince1970: startDateEpoch)
-        var totalPausedSec = defaults.integer(forKey: BabyTimerIntentBridge.stateTotalPausedSec)
-        let title = defaults.string(forKey: BabyTimerIntentBridge.stateTitle) ?? "Timer"
-
-        var newPaused: Bool
-        var newPausedElapsedSec: Int
-
-        if wasPaused {
-            // Resume: add pause duration to totalPausedSeconds
-            let pausedAt = defaults.double(forKey: BabyTimerIntentBridge.statePausedAt)
-            if pausedAt > 0 {
-                let pauseDuration = Int(Date().timeIntervalSince1970 - pausedAt)
-                totalPausedSec += pauseDuration
-            }
-            newPaused = false
-            newPausedElapsedSec = 0
-        } else {
-            // Pause: calculate elapsed for snapshot
-            let elapsed = Int(Date().timeIntervalSince(startDate)) - totalPausedSec
-            newPaused = true
-            newPausedElapsedSec = max(0, elapsed)
-            defaults.set(Date().timeIntervalSince1970, forKey: BabyTimerIntentBridge.statePausedAt)
+        // 1. Find the active Live Activity and read its CURRENT state directly
+        guard let activity = Activity<BabyTimerLiveAttributes>.activities.first else {
+            return .result()
         }
 
-        // Store updated state for next button press
-        defaults.set(newPaused, forKey: BabyTimerIntentBridge.statePaused)
-        defaults.set(totalPausedSec, forKey: BabyTimerIntentBridge.stateTotalPausedSec)
-        defaults.set(newPausedElapsedSec, forKey: BabyTimerIntentBridge.statePausedElapsedSec)
+        let current = activity.content.state
+        let now = Date()
+        let newState: BabyTimerLiveAttributes.ContentState
 
-        // Write the command for JS to pick up
-        defaults.set("toggle-live-pause", forKey: BabyTimerIntentBridge.pendingActionKey)
-        defaults.synchronize() // Flush to disk for main app to see
+        if current.paused {
+            // RESUME: Calculate how long this pause lasted
+            // When paused, the wall clock time of the pause start was:
+            //   startDate + totalPausedSeconds + pausedElapsedSeconds
+            let pauseStartDate = current.startDate.addingTimeInterval(
+                TimeInterval(current.totalPausedSeconds + current.pausedElapsedSeconds)
+            )
+            let thisPauseDuration = max(0, Int(now.timeIntervalSince(pauseStartDate)))
+            let newTotalPaused = current.totalPausedSeconds + thisPauseDuration
 
-        // Directly update the Live Activity for immediate visual feedback
-        let newState = BabyTimerLiveAttributes.ContentState(
-            title: title,
-            startDate: startDate,
-            totalPausedSeconds: totalPausedSec,
-            paused: newPaused,
-            pausedElapsedSeconds: newPausedElapsedSec
-        )
+            newState = BabyTimerLiveAttributes.ContentState(
+                title: current.title,
+                startDate: current.startDate,
+                totalPausedSeconds: newTotalPaused,
+                paused: false,
+                pausedElapsedSeconds: 0
+            )
+        } else {
+            // PAUSE: Calculate elapsed time for static snapshot
+            let adjustedStart = current.startDate.addingTimeInterval(
+                TimeInterval(current.totalPausedSeconds)
+            )
+            let elapsed = max(0, Int(now.timeIntervalSince(adjustedStart)))
 
-        if let activity = Activity<BabyTimerLiveAttributes>.activities.first {
-            await activity.update(ActivityContent(state: newState, staleDate: nil))
+            newState = BabyTimerLiveAttributes.ContentState(
+                title: current.title,
+                startDate: current.startDate,
+                totalPausedSeconds: current.totalPausedSeconds,
+                paused: true,
+                pausedElapsedSeconds: elapsed
+            )
+        }
+
+        // 2. Update the Activity immediately (instant visual feedback)
+        await activity.update(ActivityContent(state: newState, staleDate: nil))
+
+        // 3. Best-effort: signal the main app via UserDefaults
+        if let defaults = UserDefaults(suiteName: kAppGroupId) {
+            defaults.set("toggle-live-pause", forKey: kPendingActionKey)
+            defaults.synchronize()
         }
 
         return .result()
@@ -84,21 +76,7 @@ struct StopTimerIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Stop Timer"
 
     func perform() async throws -> some IntentResult {
-        guard let defaults = sharedDefaults() else { return .result() }
-
-        // Write the command for JS to pick up
-        defaults.set("stop-live-timer", forKey: BabyTimerIntentBridge.pendingActionKey)
-
-        // Clear stored state
-        defaults.removeObject(forKey: BabyTimerIntentBridge.stateStartDate)
-        defaults.removeObject(forKey: BabyTimerIntentBridge.stateTotalPausedSec)
-        defaults.removeObject(forKey: BabyTimerIntentBridge.statePaused)
-        defaults.removeObject(forKey: BabyTimerIntentBridge.statePausedElapsedSec)
-        defaults.removeObject(forKey: BabyTimerIntentBridge.statePausedAt)
-        defaults.removeObject(forKey: BabyTimerIntentBridge.stateTitle)
-        defaults.synchronize() // Flush to disk for main app to see
-
-        // Directly end the Live Activity for immediate visual feedback
+        // 1. End ALL Live Activities immediately
         let endState = BabyTimerLiveAttributes.ContentState(
             title: "Timer complete",
             startDate: Date(),
@@ -111,7 +89,14 @@ struct StopTimerIntent: LiveActivityIntent {
             await activity.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
         }
 
+        // 2. Best-effort: signal the main app via UserDefaults
+        if let defaults = UserDefaults(suiteName: kAppGroupId) {
+            defaults.set("stop-live-timer", forKey: kPendingActionKey)
+            defaults.synchronize()
+        }
+
         return .result()
     }
 }
+
 

@@ -791,19 +791,21 @@ function startNotificationEngine() {
 
     // Poll immediately when app returns to foreground (for Live Activity button presses)
     if (isNativeCapacitorApp()) {
+        const handleForegroundResume = async () => {
+            lastNativeCommandPollAt = 0;
+            // MUST await command poll first — if the intent paused/stopped the timer,
+            // we need to update JS state BEFORE syncing to avoid overwriting the intent's change
+            await pollNativeLiveActivityCommand();
+            lastLiveActivitySyncKey = '';
+            await syncNativeLiveActivity();
+        };
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
-                lastNativeCommandPollAt = 0;
-                lastLiveActivitySyncKey = '';
-                pollNativeLiveActivityCommand();
-                syncNativeLiveActivity();
+                handleForegroundResume();
             }
         });
         window.addEventListener('resume', () => {
-            lastNativeCommandPollAt = 0;
-            lastLiveActivitySyncKey = '';
-            pollNativeLiveActivityCommand();
-            syncNativeLiveActivity();
+            handleForegroundResume();
         });
     }
 }
