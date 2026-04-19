@@ -310,6 +310,7 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                 } else {
                     bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePausedAt)
                 }
+                bridgeDefaults?.synchronize()
             }
 
             call.resolve(["ok": success])
@@ -333,6 +334,7 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePausedElapsedSec)
             bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.statePausedAt)
             bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.stateTitle)
+            bridgeDefaults?.synchronize()
             call.resolve(["ok": true])
         }
     }
@@ -366,12 +368,16 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        // Ensure we read the latest cross-process data
+        defaults.synchronize()
+
         guard let action = defaults.string(forKey: BabyTimerBridgeKeys.pendingAction) else {
             call.resolve(["hasCommand": false])
             return
         }
 
         defaults.removeObject(forKey: BabyTimerBridgeKeys.pendingAction)
+        defaults.synchronize()
 
         call.resolve([
             "hasCommand": true,
