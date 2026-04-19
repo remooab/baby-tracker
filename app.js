@@ -140,6 +140,8 @@ const SOLID_FOOD_TEXTURES = {
     mixed: 'Mixed'
 };
 
+const ICON_SPRITE_PATH = 'phosphor-icons.svg';
+
 // ===== State =====
 // We keep a local copy of data synced from Firestore
 const state = {
@@ -1040,6 +1042,12 @@ function truncateText(value, maxLength = 28) {
     return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
 }
 
+function renderIcon(name, className = '', label = '') {
+    const classes = ['ph-icon', className].filter(Boolean).join(' ');
+    const aria = label ? ` role="img" aria-label="${escapeHtml(label)}"` : ' aria-hidden="true"';
+    return `<svg class="${classes}" viewBox="0 0 256 256"${aria}><use href="${ICON_SPRITE_PATH}#ph-${name}"></use></svg>`;
+}
+
 // ===== Toast Notification =====
 function showToast(message) {
     const asText = String(message || '').toLowerCase();
@@ -1912,7 +1920,7 @@ function renderFeedingLog() {
     if (feedings.length === 0) {
         list.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">🍼</div>
+                <div class="empty-icon">${renderIcon('baby', 'icon-48')}</div>
                 <p>No feedings logged</p>
                 <p class="empty-hint">Tap + to add one</p>
             </div>
@@ -1921,40 +1929,40 @@ function renderFeedingLog() {
     }
 
     list.innerHTML = feedings.map(f => {
-        let iconSvg = '';
+        let iconName = 'baby';
         let iconClass = '';
         let title = '';
         let subtitle = '';
 
         if (f.type === 'breast') {
             iconClass = 'breast';
+            iconName = 'drop';
             title = 'Nursing';
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21a9 9 0 0 1-9-9c0-3.87 2.4-7.1 5.7-8.4C9.6 3.2 10.8 3 12 3c1.2 0 2.4.2 3.3.6C18.6 4.9 21 8.1 21 12c0 .5-.1 1-.2 1.5"/><path d="M12 21a9.01 9.01 0 0 0 9-9"/><path d="M12 21v-9"/><path d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>`;
             if (f.side) subtitle = `${f.side.charAt(0).toUpperCase() + f.side.slice(1)} side`;
         } else if (f.type === 'bottle') {
             iconClass = 'bottle';
+            iconName = 'jar';
             title = 'Bottle';
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 2v2"/><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M7 9h10"/><path d="M7 14h10"/></svg>`;
             subtitle = `${f.amount}ml`;
             if (f.subtype === 'formula') {
                 title = 'Formula';
-                iconClass = 'formula'; // Use formula color style
+                iconClass = 'formula';
+                iconName = 'flask';
                 if (f.brand) subtitle += ` • ${f.brand}`;
             } else if (f.subtype === 'breast_milk') {
                 title = 'Breast Milk';
+                iconName = 'jar-label';
             }
-            // Fallback for old data or generic bottle
         } else if (f.type === 'formula') {
-            // Mapping old formula type to new look (same as bottle with formula subtype)
             iconClass = 'formula';
+            iconName = 'flask';
             title = 'Formula';
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 2v2"/><rect x="7" y="4" width="10" height="16" rx="2"/><path d="M7 9h10"/><path d="M7 14h10"/></svg>`;
             subtitle = `${f.amount}ml`;
             if (f.brand) subtitle += ` • ${f.brand}`;
         } else if (f.type === 'vitamin') {
             iconClass = 'vitamin';
+            iconName = 'pill';
             title = 'Vitamin';
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v10a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"/><path d="M8 7h8"/><path d="M12 17v-4"/><path d="M10 13h4"/></svg>`;
             subtitle = f.notes || '';
         }
 
@@ -1963,7 +1971,7 @@ function renderFeedingLog() {
         return `
             <div class="log-item" data-id="${f.id}" data-type="feeding">
                 <div class="log-icon ${iconClass}">
-                    ${iconSvg}
+                    ${renderIcon(iconName)}
                 </div>
                 <div class="log-details">
                     <div class="log-title">${title}</div>
@@ -2021,7 +2029,7 @@ function renderFoodLog() {
     if (foods.length === 0) {
         list.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">🥣</div>
+                <div class="empty-icon">${renderIcon('bowl-food', 'icon-48')}</div>
                 <p>No food logged</p>
                 <p class="empty-hint">Tap + to add one</p>
             </div>
@@ -2044,7 +2052,7 @@ function renderFoodLog() {
         return `
             <div class="log-item" data-id="${entry.id}" data-type="food">
                 <div class="log-icon food">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4a3 3 0 0 1 3 3c0 2-1.5 4-3 5S5 9 5 7a3 3 0 0 1 3-3z"/><path d="M8 12v8"/><path d="M16 4v16"/><path d="M13 7h6"/></svg>
+                    ${renderIcon('bowl-food')}
                 </div>
                 <div class="log-details">
                     <div class="log-title">${escapeHtml(entry.foods)}</div>
@@ -2318,7 +2326,7 @@ function renderSleepLog() {
     if (sleeps.length === 0) {
         list.innerHTML = `
             <div class="empty-state">
-                <div class="empty-icon">🌙</div>
+                <div class="empty-icon">${renderIcon('moon-stars', 'icon-48')}</div>
                 <p>No sleep logged</p>
                 <p class="empty-hint">Tap + to add one</p>
             </div>
@@ -2327,23 +2335,18 @@ function renderSleepLog() {
     }
 
     list.innerHTML = sleeps.map(s => {
-        let iconSvg = '';
+        let iconName = 'moon-stars';
         let iconClass = '';
         let title = '';
 
         if (s.type === 'nap') {
             iconClass = 'nap';
             title = 'Nap';
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
-            // Actually let's use a Sun or Cloud for Nap to distinguish?
-            // Or just the same Moon but lighter color is handled by CSS. 
-            // Let's use a different icon for Nap to be fancy. A Cloud?
-            // <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`;
+            iconName = 'cloud-moon';
         } else {
-            iconClass = 'night'; // CSS handles color
+            iconClass = 'night';
             title = 'Night Sleep';
-            iconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/><path d="M12 4v2"/><path d="M12 18v2"/></svg>`; // Moon with stars/sparkles
+            iconName = 'moon-stars';
         }
 
         const subtitle = s.location ? s.location.charAt(0).toUpperCase() + s.location.slice(1) : '';
@@ -2353,7 +2356,7 @@ function renderSleepLog() {
         return `
             <div class="log-item" data-id="${s.id}" data-type="sleep">
                 <div class="log-icon ${iconClass}">
-                    ${iconSvg}
+                    ${renderIcon(iconName)}
                 </div>
                 <div class="log-details">
                     <div class="log-title">${title}</div>
