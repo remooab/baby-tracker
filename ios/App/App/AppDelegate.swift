@@ -135,6 +135,18 @@ final class BabyTimerLiveActivityManager {
         )
 
         if let existing = activity, existing.attributes.sessionId == sessionId {
+            // Check if a Live Activity intent recently changed the state.
+            // If the intent set the Activity to paused but JS still thinks it's running,
+            // skip this update to avoid overwriting the intent's visual change.
+            if let defaults = UserDefaults(suiteName: BabyTimerBridgeKeys.appGroupId) {
+                defaults.synchronize()
+                if defaults.string(forKey: BabyTimerBridgeKeys.pendingAction) != nil {
+                    // Intent wrote a command that JS hasn't processed yet — skip overwrite
+                    print("[LiveActivity] Skipping update — pending intent command exists")
+                    return true
+                }
+            }
+
             if #available(iOS 16.2, *) {
                 await existing.update(ActivityContent(state: state, staleDate: nil))
             } else {

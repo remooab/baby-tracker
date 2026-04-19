@@ -218,6 +218,7 @@ function getFeedingElapsedMs(feeding) {
 
 // Track last synced Live Activity state to avoid redundant updates
 let lastLiveActivitySyncKey = '';
+let nativeIntentGuardUntil = 0; // timestamp - skip sync until this time (intent is controlling Activity)
 
 async function syncNativeLiveActivity() {
     const plugin = getNativeTimerLiveActivityPlugin();
@@ -231,6 +232,10 @@ async function syncNativeLiveActivity() {
         return;
     }
     if (!nativeCapabilities.supportsLiveActivities) return;
+
+    // Skip sync if an intent recently updated the Activity directly
+    // (prevents JS from overwriting the intent's visual update before the command is processed)
+    if (Date.now() < nativeIntentGuardUntil) return;
 
     try {
         if (state.activeTimer) {
@@ -303,6 +308,10 @@ async function pollNativeLiveActivityCommand() {
         const result = await plugin.fetchPendingCommand();
         if (!result?.hasCommand) return;
 
+        // Intent already updated the Activity visually. Guard against JS sync
+        // overwriting it while we process the command and update JS state.
+        nativeIntentGuardUntil = Date.now() + 10000; // 10s guard
+
         if (result.action === 'toggle-live-pause') {
             if (state.activeTimer) await togglePauseActiveBreastfeeding();
             else if (state.activeSleep) await togglePauseActiveSleep();
@@ -312,6 +321,9 @@ async function pollNativeLiveActivityCommand() {
             if (state.activeTimer) await stopActiveBreastfeeding();
             else if (state.activeSleep) await stopActiveSleep();
         }
+
+        // Clear the intent guard — JS state is now up-to-date, safe to sync
+        nativeIntentGuardUntil = 0;
 
         // Force immediate Live Activity update after processing command
         lastLiveActivitySyncKey = '';
