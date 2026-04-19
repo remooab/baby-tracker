@@ -79,6 +79,9 @@
     --accent-primary-dark: #5A7A8C;
     --accent-feeding: #E8B4B8;
     --accent-feeding-light: #F5D5D8;
+    --accent-food: #D7C58A;
+    --accent-food-light: #F3EBC7;
+    --accent-food-dark: #9C8242;
     --accent-sleep: #B8C5E8;
     --accent-sleep-light: #D5DEF5;
     --accent-sleep-dark: #8A9CC9;
@@ -168,7 +171,8 @@ select {
     right: 0;
     background: var(--bg-secondary);
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
+    gap: 4px;
     padding: 8px 0;
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
@@ -178,14 +182,15 @@ select {
 
 .nav-item {
     display: flex;
+    flex: 1;
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    padding: 8px 16px;
+    padding: 8px 10px;
     color: var(--text-muted);
     transition: all 0.15s ease;
     border-radius: 12px;
-    min-width: 64px;
+    min-width: 0;
 }
 
 .nav-item svg {
@@ -194,8 +199,9 @@ select {
 }
 
 .nav-item span {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .nav-item.active {
@@ -346,6 +352,64 @@ select {
     padding: 16px;
     text-align: center;
     box-shadow: var(--shadow-sm);
+}
+
+.summary-highlight {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    background: var(--bg-card);
+}
+
+.summary-highlight-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.summary-highlight-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.summary-highlight-label {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.summary-highlight-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.summary-highlight-subtext {
+    font-size: 0.86rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.food-summary-card {
+    background: linear-gradient(135deg, rgba(243, 235, 199, 0.9), rgba(255, 255, 255, 0.95));
+}
+
+.food-summary-card .summary-highlight-icon {
+    background: var(--accent-food-light);
+    color: var(--accent-food-dark);
 }
 
 .summary-number {
@@ -635,6 +699,11 @@ select {
 
 .log-icon.formula {
     background: #F0E2CC;
+}
+
+.log-icon.food {
+    background: var(--accent-food-light);
+    color: var(--accent-food-dark);
 }
 
 .log-icon.nap {
@@ -1067,6 +1136,50 @@ select {
     transform: scale(0.95);
 }
 
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--bg-primary);
+    border-radius: 12px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.check-row input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+.food-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.food-flag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 9999px;
+    background: var(--accent-food-light);
+    color: var(--accent-food-dark);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.food-flag.reaction {
+    background: rgba(224, 122, 122, 0.14);
+    color: #a45151;
+}
+
 .modal-footer {
     display: flex;
     gap: 16px;
@@ -1335,6 +1448,24 @@ select {
 
     .action-btn {
         min-height: 120px;
+    }
+}
+
+@media (max-width: 380px) {
+    .nav-item {
+        padding: 8px 6px;
+    }
+
+    .nav-item span {
+        font-size: 0.68rem;
+    }
+
+    .summary-highlight {
+        padding: 14px;
+    }
+
+    .summary-highlight-subtext {
+        white-space: normal;
     }
 }
 

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="description" content="Simple, calm baby progress tracker for feeding and sleep">
+    <meta name="description" content="Simple, calm baby progress tracker for feeding, solids, and sleep">
     <meta name="theme-color" content="#F8F6F3">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -124,6 +124,16 @@
                 </svg>
                 <span>Feeding</span>
             </button>
+            <button class="nav-item" data-screen="food">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M8 4a3 3 0 0 1 3 3c0 2-1.5 4-3 5S5 9 5 7a3 3 0 0 1 3-3z"></path>
+                    <path d="M8 12v8"></path>
+                    <path d="M16 4v16"></path>
+                    <path d="M13 7h6"></path>
+                </svg>
+                <span>Food</span>
+            </button>
             <button class="nav-item" data-screen="sleep">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                     stroke-linejoin="round">
@@ -207,6 +217,22 @@
                         <div class="summary-item">
                             <span class="summary-number" id="todayNaps">0</span>
                             <span class="summary-label">Naps</span>
+                        </div>
+                    </div>
+                    <div class="summary-highlight food-summary-card">
+                        <div class="summary-highlight-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22"
+                                height="22">
+                                <path d="M8 4a3 3 0 0 1 3 3c0 2-1.5 4-3 5S5 9 5 7a3 3 0 0 1 3-3z"></path>
+                                <path d="M8 12v8"></path>
+                                <path d="M16 4v16"></path>
+                                <path d="M13 7h6"></path>
+                            </svg>
+                        </div>
+                        <div class="summary-highlight-content">
+                            <span class="summary-highlight-label">Today's solids</span>
+                            <span class="summary-highlight-value" id="todaySolidSummary">0 logged</span>
+                            <span class="summary-highlight-subtext" id="todaySolidDetails">No foods logged yet</span>
                         </div>
                     </div>
                 </section>
@@ -314,6 +340,31 @@
                             </svg>
                         </div>
                         <p>No feedings logged yet</p>
+                        <p class="empty-hint">Tap the + button to add one</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Food Log Screen -->
+        <div class="screen" id="foodScreen">
+            <header class="screen-header">
+                <h1>Food Log</h1>
+                <button class="add-btn" id="addFoodBtn">+ Add</button>
+            </header>
+            <main class="log-content">
+                <div class="date-nav">
+                    <button class="date-nav-btn" id="foodPrevDay">←</button>
+                    <div class="date-display" id="foodDateDisplay">
+                        <span class="date-title">Today</span>
+                        <span class="date-subtitle">--</span>
+                    </div>
+                    <button class="date-nav-btn" id="foodNextDay">→</button>
+                </div>
+                <div class="log-list" id="foodLogList">
+                    <div class="empty-state">
+                        <div class="empty-icon">🥣</div>
+                        <p>No food logged yet</p>
                         <p class="empty-hint">Tap the + button to add one</p>
                     </div>
                 </div>
@@ -733,6 +784,106 @@
             <div class="modal-footer">
                 <button class="cancel-btn" data-modal="vitaminModal">Cancel</button>
                 <button class="primary-btn" id="confirmVitamin">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Solid Food Modal -->
+    <div class="modal" id="solidFoodModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"
+                        style="vertical-align: text-bottom; margin-right: 8px;">
+                        <path d="M8 4a3 3 0 0 1 3 3c0 2-1.5 4-3 5S5 9 5 7a3 3 0 0 1 3-3z"></path>
+                        <path d="M8 12v8"></path>
+                        <path d="M16 4v16"></path>
+                        <path d="M13 7h6"></path>
+                    </svg>
+                    Log Solid Food
+                </h2>
+                <button class="modal-close" data-modal="solidFoodModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="solidFoodName">Food name(s)</label>
+                    <input type="text" id="solidFoodName" placeholder="Avocado, oatmeal, banana">
+                </div>
+                <div class="form-group">
+                    <label for="solidFoodTime">Time</label>
+                    <input type="datetime-local" id="solidFoodTime">
+                </div>
+                <div class="form-group">
+                    <label>Meal Type</label>
+                    <div class="choice-buttons" id="solidMealTypeChoices">
+                        <button class="choice-btn" data-value="breakfast">Breakfast</button>
+                        <button class="choice-btn" data-value="lunch">Lunch</button>
+                        <button class="choice-btn" data-value="dinner">Dinner</button>
+                        <button class="choice-btn active" data-value="snack">Snack</button>
+                        <button class="choice-btn" data-value="first_taste">First Taste</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Intake</label>
+                    <div class="choice-buttons" id="solidIntakeChoices">
+                        <button class="choice-btn" data-value="refused">Refused</button>
+                        <button class="choice-btn" data-value="tasted">Tasted</button>
+                        <button class="choice-btn active" data-value="some">Some</button>
+                        <button class="choice-btn" data-value="most">Most</button>
+                        <button class="choice-btn" data-value="all">All</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Texture / Form</label>
+                    <div class="choice-buttons" id="solidTextureChoices">
+                        <button class="choice-btn" data-value="puree">Puree</button>
+                        <button class="choice-btn" data-value="mashed">Mashed</button>
+                        <button class="choice-btn" data-value="soft_pieces">Soft Pieces</button>
+                        <button class="choice-btn" data-value="finger_food">Finger Food</button>
+                        <button class="choice-btn" data-value="mixed">Mixed</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="check-row" for="solidFoodIsNew">
+                        <input type="checkbox" id="solidFoodIsNew">
+                        <span>New food / first exposure</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="check-row" for="solidFoodHadReaction">
+                        <input type="checkbox" id="solidFoodHadReaction">
+                        <span>Reaction observed</span>
+                    </label>
+                </div>
+                <div class="form-group hidden" id="solidReactionGroup">
+                    <label for="solidReactionNotes">Reaction notes</label>
+                    <textarea id="solidReactionNotes" placeholder="Rash, gagging, spit-up, constipation..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="solidFoodNotes">Notes (optional)</label>
+                    <textarea id="solidFoodNotes" placeholder="Anything else to remember..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" data-modal="solidFoodModal">Cancel</button>
+                <button class="primary-btn" id="confirmSolidFood">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Food Modal -->
+    <div class="modal" id="editFoodModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Food</h2>
+                <button class="modal-close" data-modal="editFoodModal">×</button>
+            </div>
+            <div class="modal-body" id="editFoodBody">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button class="danger-btn" id="deleteFoodBtn">Delete</button>
+                <button class="primary-btn" id="saveEditFood">Save</button>
             </div>
         </div>
     </div>

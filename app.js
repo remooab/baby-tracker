@@ -99,6 +99,7 @@ enableIndexedDbPersistence(db).catch((err) => {
 const COLLECTIONS = {
     baby: 'baby',
     feedings: 'feedings',
+    solids: 'solids',
     sleeps: 'sleeps',
     settings: 'settings'
 };
@@ -115,6 +116,30 @@ const DEFAULT_SETTINGS = {
     nightSleepAlertMinutes: 240
 };
 
+const SOLID_FOOD_MEAL_TYPES = {
+    breakfast: 'Breakfast',
+    lunch: 'Lunch',
+    dinner: 'Dinner',
+    snack: 'Snack',
+    first_taste: 'First taste'
+};
+
+const SOLID_FOOD_INTAKE_LEVELS = {
+    refused: 'Refused',
+    tasted: 'Tasted',
+    some: 'Some',
+    most: 'Most',
+    all: 'All'
+};
+
+const SOLID_FOOD_TEXTURES = {
+    puree: 'Puree',
+    mashed: 'Mashed',
+    soft_pieces: 'Soft pieces',
+    finger_food: 'Finger food',
+    mixed: 'Mixed'
+};
+
 // ===== State =====
 // We keep a local copy of data synced from Firestore
 const state = {
@@ -122,10 +147,12 @@ const state = {
     baby: null,
     settings: { ...DEFAULT_SETTINGS },
     feedings: [],
+    solids: [],
     sleeps: [],
     activeTimer: null,
     activeSleep: null,
     currentFeedingDate: new Date(),
+    currentFoodDate: new Date(),
     currentSleepDate: new Date(),
     editingId: null
 };
@@ -872,7 +899,12 @@ async function clearCollection(collectionName) {
     if (!state.user) return;
 
     // In a real app, do this via a Cloud Function. For MVP, we iterate local state.
-    const items = collectionName === COLLECTIONS.feedings ? state.feedings : state.sleeps;
+    const collectionItems = {
+        [COLLECTIONS.feedings]: state.feedings,
+        [COLLECTIONS.solids]: state.solids,
+        [COLLECTIONS.sleeps]: state.sleeps
+    };
+    const items = collectionItems[collectionName] || [];
     const promises = items.map(item => deleteDoc(getUserRef(collectionName, item.id)));
     await Promise.all(promises);
 }
@@ -962,6 +994,50 @@ function getLocalDateTimeString(date = new Date()) {
     const d = new Date(date);
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 16);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function buildSelectOptions(options, selectedValue, { includeBlank = false, blankLabel = 'Select an option' } = {}) {
+    let html = '';
+
+    if (includeBlank) {
+        html += `<option value="" ${selectedValue ? '' : 'selected'}>${escapeHtml(blankLabel)}</option>`;
+    }
+
+    return html + Object.entries(options)
+        .map(([value, label]) => `<option value="${value}" ${value === selectedValue ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+        .join('');
+}
+
+function getActiveChoiceValue(containerId, fallback = null) {
+    return document.querySelector(`#${containerId} .choice-btn.active`)?.dataset.value || fallback;
+}
+
+function setActiveChoiceValue(containerId, value) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.querySelectorAll('.choice-btn').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.value === value);
+    });
+}
+
+function formatOptionLabel(options, value) {
+    return options[value] || value || '';
+}
+
+function truncateText(value, maxLength = 28) {
+    const text = String(value || '').trim();
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}...`;
 }
 
 // ===== Toast Notification =====
@@ -1057,13 +1133,14 @@ function showConfirmDialog({
 
 // ===== Real-time Listeners =====
 // ===== Real-time Listeners =====
-let unsubBaby, unsubSettings, unsubFeedings, unsubSleeps;
+let unsubBaby, unsubSettings, unsubFeedings, unsubSolids, unsubSleeps;
 
 function initListeners() {
     // Clean up existing listeners if any
     if (unsubBaby) unsubBaby();
     if (unsubSettings) unsubSettings();
     if (unsubFeedings) unsubFeedings();
+    if (unsubSolids) unsubSolids();
     if (unsubSleeps) unsubSleeps();
 
     if (!state.user) {
@@ -1071,9 +1148,11 @@ function initListeners() {
         state.baby = null;
         state.settings = { ...DEFAULT_SETTINGS };
         state.feedings = [];
+        state.solids = [];
         state.sleeps = [];
         updateDashboard();
         renderFeedingLog();
+        renderFoodLog();
         renderSleepLog();
         updateBabyUI();
         updateSettingsUI();
@@ -1117,6 +1196,22 @@ function initListeners() {
         renderFeedingLog();
     });
 
+    // Solid Food Listener
+    // Path: users/{uid}/solids
+    const qSolids = query(
+        collection(db, 'users', userId, COLLECTIONS.solids),
+        orderBy("startTime", "desc")
+    );
+    unsubSolids = onSnapshot(qSolids, (snapshot) => {
+        state.solids = [];
+        snapshot.forEach((doc) => {
+            state.solids.push(doc.data());
+        });
+
+        updateDashboard();
+        renderFoodLog();
+    });
+
     // Sleep Listener
     // Path: users/{uid}/sleeps
     const qSleeps = query(
@@ -1152,6 +1247,7 @@ function initNavigation() {
 
             if (screenId === 'home') updateDashboard();
             if (screenId === 'feeding') renderFeedingLog();
+            if (screenId === 'food') renderFoodLog();
             if (screenId === 'sleep') renderSleepLog();
         });
     });
@@ -1353,6 +1449,32 @@ function updateTodaySummary() {
     // Nap count
     const napCount = todaySleeps.filter(s => s.type === 'nap').length;
     document.getElementById('todayNaps').textContent = napCount;
+
+    // Today's solids
+    const todaySolids = state.solids.filter(entry => entry.startTime >= startOfDay && entry.startTime <= endOfDay);
+    const latestSolid = todaySolids.slice().sort((a, b) => b.startTime - a.startTime)[0];
+    const newFoodCount = todaySolids.filter(entry => entry.isNewFood).length;
+    const solidSummaryEl = document.getElementById('todaySolidSummary');
+    const solidDetailsEl = document.getElementById('todaySolidDetails');
+
+    if (solidSummaryEl) {
+        solidSummaryEl.textContent = `${todaySolids.length} logged`;
+    }
+
+    if (solidDetailsEl) {
+        if (todaySolids.length === 0) {
+            solidDetailsEl.textContent = 'No foods logged yet';
+        } else {
+            const detailParts = [];
+            if (newFoodCount > 0) {
+                detailParts.push(`${newFoodCount} new food${newFoodCount === 1 ? '' : 's'}`);
+            }
+            if (latestSolid?.foods) {
+                detailParts.push(`Last: ${truncateText(latestSolid.foods, 26)}`);
+            }
+            solidDetailsEl.textContent = detailParts.join(' • ') || 'Food logged today';
+        }
+    }
 }
 
 function checkActiveTimers() {
@@ -1636,6 +1758,71 @@ function initVitamin() {
     });
 }
 
+// ===== Solid Food =====
+function resetSolidFoodForm() {
+    document.getElementById('solidFoodName').value = '';
+    document.getElementById('solidFoodTime').value = getLocalDateTimeString();
+    document.getElementById('solidFoodIsNew').checked = false;
+    document.getElementById('solidFoodHadReaction').checked = false;
+    document.getElementById('solidReactionNotes').value = '';
+    document.getElementById('solidFoodNotes').value = '';
+
+    setActiveChoiceValue('solidMealTypeChoices', 'snack');
+    setActiveChoiceValue('solidIntakeChoices', 'some');
+    setActiveChoiceValue('solidTextureChoices', null);
+
+    document.getElementById('solidReactionGroup').classList.add('hidden');
+}
+
+function initSolidFood() {
+    const reactionToggle = document.getElementById('solidFoodHadReaction');
+    const reactionGroup = document.getElementById('solidReactionGroup');
+
+    const syncReactionGroup = () => {
+        reactionGroup.classList.toggle('hidden', !reactionToggle.checked);
+    };
+
+    reactionToggle.addEventListener('change', syncReactionGroup);
+    syncReactionGroup();
+
+    document.getElementById('confirmSolidFood').addEventListener('click', async () => {
+        const foods = document.getElementById('solidFoodName').value.trim();
+        const timeValue = document.getElementById('solidFoodTime').value;
+        const startTime = timeValue ? new Date(timeValue).getTime() : Date.now();
+        const hadReaction = document.getElementById('solidFoodHadReaction').checked;
+
+        if (!foods) {
+            showToast('Please enter at least one food');
+            return;
+        }
+
+        if (Number.isNaN(startTime)) {
+            showToast('Please choose a valid time');
+            return;
+        }
+
+        const entry = {
+            id: generateId(),
+            foods,
+            startTime,
+            mealType: getActiveChoiceValue('solidMealTypeChoices', 'snack'),
+            intake: getActiveChoiceValue('solidIntakeChoices', 'some'),
+            texture: getActiveChoiceValue('solidTextureChoices', null),
+            isNewFood: document.getElementById('solidFoodIsNew').checked,
+            hadReaction,
+            reactionNotes: hadReaction ? (document.getElementById('solidReactionNotes').value.trim() || null) : null,
+            notes: document.getElementById('solidFoodNotes').value.trim() || null
+        };
+
+        await saveDoc(COLLECTIONS.solids, entry);
+        closeModal('solidFoodModal');
+        resetSolidFoodForm();
+        showToast('Solid food saved');
+    });
+
+    resetSolidFoodForm();
+}
+
 // ===== Sleep =====
 function initSleep() {
     document.getElementById('startSleep').addEventListener('click', () => {
@@ -1810,6 +1997,205 @@ function initFeedingLog() {
     document.getElementById('addFeedingBtn').addEventListener('click', () => {
         document.getElementById('bottleTime').value = getLocalDateTimeString();
         openModal('bottleModal');
+    });
+}
+
+// ===== Food Log =====
+function renderFoodLog() {
+    const date = state.currentFoodDate;
+    const startOfDay = getStartOfDay(date).getTime();
+    const endOfDay = getEndOfDay(date).getTime();
+
+    const { title, subtitle } = formatDateForHeader(date);
+    const display = document.getElementById('foodDateDisplay');
+    if (display) {
+        display.querySelector('.date-title').textContent = title;
+        display.querySelector('.date-subtitle').textContent = subtitle;
+    }
+
+    const foods = state.solids
+        .filter(entry => entry.startTime >= startOfDay && entry.startTime <= endOfDay);
+
+    const list = document.getElementById('foodLogList');
+
+    if (foods.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🥣</div>
+                <p>No food logged</p>
+                <p class="empty-hint">Tap + to add one</p>
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = foods.map((entry) => {
+        const details = [
+            formatOptionLabel(SOLID_FOOD_MEAL_TYPES, entry.mealType),
+            formatOptionLabel(SOLID_FOOD_INTAKE_LEVELS, entry.intake),
+            entry.texture ? formatOptionLabel(SOLID_FOOD_TEXTURES, entry.texture) : ''
+        ].filter(Boolean).join(' • ');
+
+        const flags = [
+            entry.isNewFood ? '<span class="food-flag">New food</span>' : '',
+            entry.hadReaction ? '<span class="food-flag reaction">Reaction</span>' : ''
+        ].filter(Boolean).join('');
+
+        return `
+            <div class="log-item" data-id="${entry.id}" data-type="food">
+                <div class="log-icon food">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 4a3 3 0 0 1 3 3c0 2-1.5 4-3 5S5 9 5 7a3 3 0 0 1 3-3z"/><path d="M8 12v8"/><path d="M16 4v16"/><path d="M13 7h6"/></svg>
+                </div>
+                <div class="log-details">
+                    <div class="log-title">${escapeHtml(entry.foods)}</div>
+                    <div class="log-subtitle">${escapeHtml(details)}</div>
+                    ${flags ? `<div class="food-flags">${flags}</div>` : ''}
+                </div>
+                <div class="log-time">
+                    <span class="log-time-main">${formatTime(entry.startTime)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    list.querySelectorAll('.log-item').forEach((item) => {
+        item.addEventListener('click', () => openEditFoodModal(item.dataset.id));
+    });
+}
+
+function initFoodLog() {
+    document.getElementById('foodPrevDay').addEventListener('click', () => {
+        state.currentFoodDate.setDate(state.currentFoodDate.getDate() - 1);
+        renderFoodLog();
+    });
+
+    document.getElementById('foodNextDay').addEventListener('click', () => {
+        state.currentFoodDate.setDate(state.currentFoodDate.getDate() + 1);
+        renderFoodLog();
+    });
+
+    document.getElementById('addFoodBtn').addEventListener('click', () => {
+        resetSolidFoodForm();
+        openModal('solidFoodModal');
+    });
+}
+
+async function openEditFoodModal(id) {
+    const entry = state.solids.find(food => food.id === id);
+    if (!entry) return;
+
+    state.editingId = id;
+
+    const body = document.getElementById('editFoodBody');
+    body.innerHTML = `
+        <div class="form-group">
+            <label for="editFoodName">Food name(s)</label>
+            <input type="text" id="editFoodName" value="${escapeHtml(entry.foods)}">
+        </div>
+        <div class="form-group">
+            <label for="editFoodTime">Time</label>
+            <input type="datetime-local" id="editFoodTime" value="${getLocalDateTimeString(entry.startTime)}">
+        </div>
+        <div class="form-group">
+            <label for="editFoodMealType">Meal Type</label>
+            <select id="editFoodMealType">
+                ${buildSelectOptions(SOLID_FOOD_MEAL_TYPES, entry.mealType)}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="editFoodIntake">Intake</label>
+            <select id="editFoodIntake">
+                ${buildSelectOptions(SOLID_FOOD_INTAKE_LEVELS, entry.intake)}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="editFoodTexture">Texture / Form</label>
+            <select id="editFoodTexture">
+                ${buildSelectOptions(SOLID_FOOD_TEXTURES, entry.texture, { includeBlank: true, blankLabel: 'Not set' })}
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="check-row" for="editFoodIsNew">
+                <input type="checkbox" id="editFoodIsNew" ${entry.isNewFood ? 'checked' : ''}>
+                <span>New food / first exposure</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="check-row" for="editFoodHadReaction">
+                <input type="checkbox" id="editFoodHadReaction" ${entry.hadReaction ? 'checked' : ''}>
+                <span>Reaction observed</span>
+            </label>
+        </div>
+        <div class="form-group ${entry.hadReaction ? '' : 'hidden'}" id="editFoodReactionGroup">
+            <label for="editFoodReactionNotes">Reaction notes</label>
+            <textarea id="editFoodReactionNotes">${escapeHtml(entry.reactionNotes || '')}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="editFoodNotes">Notes</label>
+            <textarea id="editFoodNotes">${escapeHtml(entry.notes || '')}</textarea>
+        </div>
+    `;
+
+    openModal('editFoodModal');
+
+    const reactionCheckbox = document.getElementById('editFoodHadReaction');
+    const reactionGroup = document.getElementById('editFoodReactionGroup');
+    const syncReactionGroup = () => {
+        reactionGroup.classList.toggle('hidden', !reactionCheckbox.checked);
+    };
+
+    reactionCheckbox.addEventListener('change', syncReactionGroup);
+    syncReactionGroup();
+}
+
+function initEditFood() {
+    document.getElementById('saveEditFood').addEventListener('click', async () => {
+        const entry = { ...state.solids.find(food => food.id === state.editingId) };
+        if (!entry) return;
+
+        const foods = document.getElementById('editFoodName').value.trim();
+        const timeValue = document.getElementById('editFoodTime').value;
+        const startTime = timeValue ? new Date(timeValue).getTime() : NaN;
+        const hadReaction = document.getElementById('editFoodHadReaction').checked;
+
+        if (!foods) {
+            showToast('Please enter at least one food');
+            return;
+        }
+
+        if (Number.isNaN(startTime)) {
+            showToast('Please choose a valid time');
+            return;
+        }
+
+        entry.foods = foods;
+        entry.startTime = startTime;
+        entry.mealType = document.getElementById('editFoodMealType').value || 'snack';
+        entry.intake = document.getElementById('editFoodIntake').value || 'some';
+        entry.texture = document.getElementById('editFoodTexture').value || null;
+        entry.isNewFood = document.getElementById('editFoodIsNew').checked;
+        entry.hadReaction = hadReaction;
+        entry.reactionNotes = hadReaction ? (document.getElementById('editFoodReactionNotes').value.trim() || null) : null;
+        entry.notes = document.getElementById('editFoodNotes').value.trim() || null;
+
+        await saveDoc(COLLECTIONS.solids, entry);
+        closeModal('editFoodModal');
+        showToast('Food entry updated');
+    });
+
+    document.getElementById('deleteFoodBtn').addEventListener('click', async () => {
+        const shouldDelete = await showConfirmDialog({
+            title: 'Delete Food Entry',
+            message: 'Delete this food entry? This cannot be undone.',
+            confirmText: 'Delete',
+            destructive: true
+        });
+
+        if (shouldDelete) {
+            await removeDoc(COLLECTIONS.solids, state.editingId);
+            closeModal('editFoodModal');
+            showToast('Food entry deleted');
+        }
     });
 }
 
@@ -2170,6 +2556,13 @@ function initSettings() {
             csv += `${f.type},${date},${time},${duration},${f.amount || ''},${f.side || ''},${f.notes || ''}\n`;
         });
 
+        csv += '\nFood(s),Date,Time,Meal Type,Intake,Texture,New Food,Reaction,Reaction Notes,Notes\n';
+        state.solids.forEach((entry) => {
+            const date = new Date(entry.startTime).toLocaleDateString();
+            const time = formatTime(entry.startTime);
+            csv += `${entry.foods || ''},${date},${time},${formatOptionLabel(SOLID_FOOD_MEAL_TYPES, entry.mealType)},${formatOptionLabel(SOLID_FOOD_INTAKE_LEVELS, entry.intake)},${formatOptionLabel(SOLID_FOOD_TEXTURES, entry.texture)},${entry.isNewFood ? 'Yes' : 'No'},${entry.hadReaction ? 'Yes' : 'No'},${entry.reactionNotes || ''},${entry.notes || ''}\n`;
+        });
+
         csv += '\nSleep Type,Date,Start Time,End Time,Duration,Location\n';
         state.sleeps.forEach(s => {
             const date = new Date(s.startTime).toLocaleDateString();
@@ -2192,13 +2585,14 @@ function initSettings() {
     document.getElementById('clearData').addEventListener('click', async () => {
         const shouldClear = await showConfirmDialog({
             title: 'Clear All Data',
-            message: 'This permanently deletes all feeding and sleep records.',
+            message: 'This permanently deletes all feeding, food, and sleep records.',
             confirmText: 'Delete All',
             destructive: true
         });
 
         if (shouldClear) {
             await clearCollection(COLLECTIONS.feedings);
+            await clearCollection(COLLECTIONS.solids);
             await clearCollection(COLLECTIONS.sleeps);
             showToast('All data cleared');
         }
@@ -2409,10 +2803,13 @@ async function init() {
         initBottle();
         initFormula();
         initVitamin();
+        initSolidFood();
         initSleep();
 
         initFeedingLog();
+        initFoodLog();
         initSleepLog();
+        initEditFood();
         initEditFeeding();
         initEditSleep();
 
