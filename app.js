@@ -1460,78 +1460,7 @@ function updateDashboard() {
 }
 
 function updateQuickStats() {
-    const feedings = state.feedings; // Already sorted desc by listener
-    const sleeps = state.sleeps;     // Already sorted desc by listener
-
-    const lastFeeding = feedings[0];
-    const babyName = getBabyDisplayName();
-    const statusCard = document.getElementById('statusCard');
-    const statusChipEl = document.getElementById('statusChip');
-    const statusTitleEl = document.getElementById('statusTitle');
-    const statusPrimaryDetailEl = document.getElementById('statusPrimaryDetail');
-    const statusSecondaryDetailEl = document.getElementById('statusSecondaryDetail');
-    const statusIconUse = document.getElementById('statusIconUse');
-
-    if (!statusCard || !statusChipEl || !statusTitleEl || !statusPrimaryDetailEl || !statusSecondaryDetailEl || !statusIconUse) {
-        return;
-    }
-
-    const activeFeeding = feedings.find(f => f.type === 'breast' && !f.endTime);
-    const activeSleep = sleeps.find(s => !s.endTime);
-    const lastEndedSleep = sleeps.filter(s => s.endTime).sort((a, b) => b.endTime - a.endTime)[0];
-
-    let statusState = 'idle';
-    let statusChip = 'No data';
-    let statusTitle = 'Home status updates will appear here';
-    let statusPrimary = 'Log a feeding or sleep to start the dashboard.';
-    let statusSecondary = 'Today\'s summary updates automatically as you track.';
-    let statusIconHref = 'phosphor-icons.svg#ph-baby';
-
-    if (activeFeeding) {
-        const feedingElapsed = formatDuration(Math.max(0, getElapsedForEntry(activeFeeding)));
-        statusState = 'feeding';
-        statusChip = 'Nursing';
-        statusTitle = `${babyName} is currently nursing`;
-        statusPrimary = activeFeeding.isPaused ? `Feeding paused at ${feedingElapsed}` : `Feeding for ${feedingElapsed}`;
-        statusSecondary = lastEndedSleep
-            ? `Last sleep ended ${formatTimeAgo(lastEndedSleep.endTime)}`
-            : `Started ${formatDateTimeShort(activeFeeding.startTime)}`;
-        statusIconHref = 'phosphor-icons.svg#ph-drop';
-    } else if (activeSleep) {
-        const sleepElapsed = formatDuration(Math.max(0, getElapsedForEntry(activeSleep)));
-        const isNap = activeSleep.type === 'nap';
-        statusState = 'sleep';
-        statusChip = isNap ? 'Napping' : 'Sleeping';
-        statusTitle = `${babyName} is currently ${isNap ? 'napping' : 'sleeping'}`;
-        statusPrimary = activeSleep.isPaused ? `Sleep paused at ${sleepElapsed}` : `${isNap ? 'Sleeping' : 'Asleep'} for ${sleepElapsed}`;
-        statusSecondary = lastFeeding
-            ? `Last feeding ${formatTimeAgo(lastFeeding.startTime)}`
-            : 'Sleep data is tracking live.';
-        statusIconHref = 'phosphor-icons.svg#ph-moon-stars';
-    } else if (lastEndedSleep) {
-        statusState = 'awake';
-        statusChip = 'Awake';
-        statusTitle = `${babyName} is awake`;
-        statusPrimary = `Awake for ${formatElapsedSince(lastEndedSleep.endTime)}`;
-        statusSecondary = lastFeeding
-            ? `Last feeding ${formatDateTimeShort(lastFeeding.startTime)}`
-            : `Last sleep ended ${formatDateTimeShort(lastEndedSleep.endTime)}`;
-        statusIconHref = 'phosphor-icons.svg#ph-baby';
-    } else if (lastFeeding) {
-        statusState = 'awake';
-        statusChip = 'Feeding logged';
-        statusTitle = `${babyName}'s latest feeding is saved`;
-        statusPrimary = `Last feeding ${formatDateTimeShort(lastFeeding.startTime)}`;
-        statusSecondary = 'Sleep insights will appear after the first nap or bedtime.';
-        statusIconHref = 'phosphor-icons.svg#ph-drop';
-    }
-
-    statusCard.dataset.state = statusState;
-    statusChipEl.textContent = statusChip;
-    statusTitleEl.textContent = statusTitle;
-    statusPrimaryDetailEl.textContent = statusPrimary;
-    statusSecondaryDetailEl.textContent = statusSecondary;
-    statusIconUse.setAttribute('href', statusIconHref);
+    return;
 }
 
 function updateTodaySummary() {
@@ -2904,7 +2833,6 @@ async function init() {
         consumeNotificationActionFromUrl();
 
         initNavigation();
-        startHomeStatusTicker();
         initModals();
         initSelectors();
         initAmountButtons();

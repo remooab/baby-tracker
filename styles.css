@@ -228,10 +228,9 @@ select {
     gap: 4px;
     padding: 8px 0;
     padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 -1px 0 var(--card-border);
     z-index: 100;
-    border-radius: 16px 16px 0 0;
-    backdrop-filter: blur(20px);
+    border-radius: 0;
     border-top: 1px solid var(--card-border);
 }
 
@@ -706,7 +705,7 @@ select {
     background: linear-gradient(160deg, var(--hero-start), var(--hero-end));
     padding: 24px;
     padding-top: calc(24px + env(safe-area-inset-top));
-    padding-bottom: 72px;
+    padding-bottom: 36px;
     border-radius: 0 0 32px 32px;
     color: var(--hero-text);
 }
@@ -784,7 +783,16 @@ select {
 #homeScreen .main-content {
     position: relative;
     z-index: 1;
-    padding: 0 24px 24px;
+    padding: 24px 24px 24px;
+}
+
+#feedingScreen .screen-header,
+#foodScreen .screen-header,
+#sleepScreen .screen-header {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    background: var(--bg-secondary);
 }
 
 .status-section {
@@ -1638,6 +1646,7 @@ select {
     width: 100%;
     max-width: 500px;
     max-height: 90vh;
+    overflow-x: hidden;
     overflow-y: auto;
     transform: translateY(100%);
     transition: transform 0.25s ease;
@@ -1679,6 +1688,21 @@ select {
 
 .modal-body {
     padding: 24px;
+    overflow-x: hidden;
+}
+
+.modal-body .form-group,
+.modal-body .choice-buttons,
+.modal-body .check-row {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.modal-body .form-group input,
+.modal-body .form-group textarea,
+.modal-body .form-group select {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .choice-buttons {
