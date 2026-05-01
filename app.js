@@ -931,6 +931,15 @@ function formatDate(date) {
     return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function formatDateTimeShort(date) {
+    return new Date(date).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
 function formatDuration(ms) {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
@@ -959,6 +968,10 @@ function formatTimeAgo(timestamp) {
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ${minutes % 60}m ago`;
     return formatDate(timestamp);
+}
+
+function formatElapsedSince(timestamp) {
+    return formatDuration(Math.max(0, Date.now() - timestamp));
 }
 
 function calculateBabyAge(birthDate) {
@@ -1338,12 +1351,19 @@ function initAmountButtons() {
 
 function updateBabyUI() {
     const babyInfo = document.getElementById('babyInfo');
-    if (state.baby && state.baby.name) {
-        babyInfo.querySelector('.baby-name').textContent = `Hello, ${state.baby.name}`;
-        babyInfo.querySelector('.baby-age').textContent = state.baby.birthDate ? calculateBabyAge(state.baby.birthDate) : '';
-    } else {
-        babyInfo.querySelector('.baby-name').textContent = 'Hello, Baby';
-        babyInfo.querySelector('.baby-age').textContent = 'Set up your baby\'s info in settings';
+    if (!babyInfo) return;
+
+    const babyName = getBabyDisplayName();
+    const babyAge = state.baby?.birthDate
+        ? calculateBabyAge(state.baby.birthDate)
+        : 'Set up your baby\'s info in settings';
+
+    babyInfo.querySelector('.baby-name').textContent = `Hello, ${babyName}`;
+    babyInfo.querySelector('.baby-age').textContent = babyAge;
+
+    const avatarInitials = document.getElementById('babyAvatarInitials');
+    if (avatarInitials) {
+        avatarInitials.textContent = getBabyInitials(babyName);
     }
 }
 
@@ -1394,6 +1414,43 @@ function updateSettingsUI() {
     }
 }
 
+function getBabyDisplayName() {
+    return state.baby?.name?.trim() || 'Baby';
+}
+
+function getBabyInitials(name) {
+    return String(name || 'Baby')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join('') || 'B';
+}
+
+function getElapsedForEntry(entry) {
+    if (!entry) return 0;
+
+    if (entry.isPaused) {
+        return entry.pauseStartTime - entry.startTime - (entry.totalPausedMs || 0);
+    }
+
+    return Date.now() - entry.startTime - (entry.totalPausedMs || 0);
+}
+
+let homeStatusInterval = null;
+
+function startHomeStatusTicker() {
+    if (homeStatusInterval) return;
+
+    homeStatusInterval = setInterval(() => {
+        const homeScreen = document.getElementById('homeScreen');
+        if (homeScreen?.classList.contains('active')) {
+            updateQuickStats();
+        }
+    }, 30000);
+}
+
 function updateDashboard() {
     // This is called automatically by listeners when data changes
     updateQuickStats();
@@ -1406,26 +1463,75 @@ function updateQuickStats() {
     const feedings = state.feedings; // Already sorted desc by listener
     const sleeps = state.sleeps;     // Already sorted desc by listener
 
-    // Last feeding
     const lastFeeding = feedings[0];
-    const lastFeedingEl = document.getElementById('lastFeedingTime');
-    lastFeedingEl.textContent = lastFeeding ? formatTimeAgo(lastFeeding.startTime) : 'No data yet';
+    const babyName = getBabyDisplayName();
+    const statusCard = document.getElementById('statusCard');
+    const statusChipEl = document.getElementById('statusChip');
+    const statusTitleEl = document.getElementById('statusTitle');
+    const statusPrimaryDetailEl = document.getElementById('statusPrimaryDetail');
+    const statusSecondaryDetailEl = document.getElementById('statusSecondaryDetail');
+    const statusIconUse = document.getElementById('statusIconUse');
 
-    // Last sleep / current awake time
-    // First check if there's any sleep that hasn't ended
+    if (!statusCard || !statusChipEl || !statusTitleEl || !statusPrimaryDetailEl || !statusSecondaryDetailEl || !statusIconUse) {
+        return;
+    }
+
+    const activeFeeding = feedings.find(f => f.type === 'breast' && !f.endTime);
     const activeSleep = sleeps.find(s => !s.endTime);
-    // Otherwise look for the most recently ended sleep
     const lastEndedSleep = sleeps.filter(s => s.endTime).sort((a, b) => b.endTime - a.endTime)[0];
 
-    const lastSleepEl = document.getElementById('lastSleepTime');
+    let statusState = 'idle';
+    let statusChip = 'No data';
+    let statusTitle = 'Home status updates will appear here';
+    let statusPrimary = 'Log a feeding or sleep to start the dashboard.';
+    let statusSecondary = 'Today\'s summary updates automatically as you track.';
+    let statusIconHref = 'phosphor-icons.svg#ph-baby';
 
-    if (activeSleep) {
-        lastSleepEl.textContent = 'Currently sleeping';
+    if (activeFeeding) {
+        const feedingElapsed = formatDuration(Math.max(0, getElapsedForEntry(activeFeeding)));
+        statusState = 'feeding';
+        statusChip = 'Nursing';
+        statusTitle = `${babyName} is currently nursing`;
+        statusPrimary = activeFeeding.isPaused ? `Feeding paused at ${feedingElapsed}` : `Feeding for ${feedingElapsed}`;
+        statusSecondary = lastEndedSleep
+            ? `Last sleep ended ${formatTimeAgo(lastEndedSleep.endTime)}`
+            : `Started ${formatDateTimeShort(activeFeeding.startTime)}`;
+        statusIconHref = 'phosphor-icons.svg#ph-drop';
+    } else if (activeSleep) {
+        const sleepElapsed = formatDuration(Math.max(0, getElapsedForEntry(activeSleep)));
+        const isNap = activeSleep.type === 'nap';
+        statusState = 'sleep';
+        statusChip = isNap ? 'Napping' : 'Sleeping';
+        statusTitle = `${babyName} is currently ${isNap ? 'napping' : 'sleeping'}`;
+        statusPrimary = activeSleep.isPaused ? `Sleep paused at ${sleepElapsed}` : `${isNap ? 'Sleeping' : 'Asleep'} for ${sleepElapsed}`;
+        statusSecondary = lastFeeding
+            ? `Last feeding ${formatTimeAgo(lastFeeding.startTime)}`
+            : 'Sleep data is tracking live.';
+        statusIconHref = 'phosphor-icons.svg#ph-moon-stars';
     } else if (lastEndedSleep) {
-        lastSleepEl.textContent = `Awake for ${formatTimeAgo(lastEndedSleep.endTime).replace(' ago', '')}`;
-    } else {
-        lastSleepEl.textContent = 'No data yet';
+        statusState = 'awake';
+        statusChip = 'Awake';
+        statusTitle = `${babyName} is awake`;
+        statusPrimary = `Awake for ${formatElapsedSince(lastEndedSleep.endTime)}`;
+        statusSecondary = lastFeeding
+            ? `Last feeding ${formatDateTimeShort(lastFeeding.startTime)}`
+            : `Last sleep ended ${formatDateTimeShort(lastEndedSleep.endTime)}`;
+        statusIconHref = 'phosphor-icons.svg#ph-baby';
+    } else if (lastFeeding) {
+        statusState = 'awake';
+        statusChip = 'Feeding logged';
+        statusTitle = `${babyName}'s latest feeding is saved`;
+        statusPrimary = `Last feeding ${formatDateTimeShort(lastFeeding.startTime)}`;
+        statusSecondary = 'Sleep insights will appear after the first nap or bedtime.';
+        statusIconHref = 'phosphor-icons.svg#ph-drop';
     }
+
+    statusCard.dataset.state = statusState;
+    statusChipEl.textContent = statusChip;
+    statusTitleEl.textContent = statusTitle;
+    statusPrimaryDetailEl.textContent = statusPrimary;
+    statusSecondaryDetailEl.textContent = statusSecondary;
+    statusIconUse.setAttribute('href', statusIconHref);
 }
 
 function updateTodaySummary() {
@@ -2798,6 +2904,7 @@ async function init() {
         consumeNotificationActionFromUrl();
 
         initNavigation();
+        startHomeStatusTicker();
         initModals();
         initSelectors();
         initAmountButtons();

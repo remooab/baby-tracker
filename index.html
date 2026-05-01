@@ -115,96 +115,34 @@
         <!-- Home Screen -->
         <div class="screen active" id="homeScreen">
             <header class="app-header">
-                <div class="baby-info" id="babyInfo">
-                    <h1 class="baby-name">Hello, Baby</h1>
-                    <p class="baby-age">Set up your baby's info in settings</p>
+                <div class="home-hero">
+                    <div class="baby-avatar" id="babyAvatar" aria-hidden="true">
+                        <span class="baby-avatar-initials" id="babyAvatarInitials">B</span>
+                    </div>
+                    <div class="baby-info" id="babyInfo">
+                        <h1 class="baby-name">Hello, Baby</h1>
+                        <p class="baby-age">Set up your baby's info in settings</p>
+                    </div>
                 </div>
             </header>
 
-            <main class="main-content">
-                <!-- Quick Stats -->
-                <section class="stats-section">
-                    <div class="stat-card feeding-stat">
-                        <div class="stat-icon">
-                            <svg class="ph-icon icon-24" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-baby"></use></svg>
+            <main class="main-content home-content">
+                <section class="status-section">
+                    <div class="status-card" id="statusCard" data-state="idle">
+                        <div class="status-card-meta">
+                            <span class="status-label">Status</span>
+                            <span class="status-chip" id="statusChip">No data</span>
                         </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Last feeding</span>
-                            <span class="stat-value" id="lastFeedingTime">No data yet</span>
-                        </div>
-                    </div>
-                    <div class="stat-card sleep-stat">
-                        <div class="stat-icon">
-                            <svg class="ph-icon icon-24" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-moon-stars"></use></svg>
-                        </div>
-                        <div class="stat-content">
-                            <span class="stat-label">Last sleep</span>
-                            <span class="stat-value" id="lastSleepTime">No data yet</span>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Today's Summary -->
-                <section class="summary-section">
-                    <h2 class="section-title">Today's Summary</h2>
-                    <div class="summary-grid">
-                        <div class="summary-item">
-                            <span class="summary-number" id="todayFeedings">0</span>
-                            <span class="summary-label">Feedings</span>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-number" id="todayAmount">0</span>
-                            <span class="summary-label">ml total</span>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-number" id="todaySleep">0h</span>
-                            <span class="summary-label">Sleep</span>
-                        </div>
-                        <div class="summary-item">
-                            <span class="summary-number" id="todayNaps">0</span>
-                            <span class="summary-label">Naps</span>
-                        </div>
-                    </div>
-                    <div class="summary-highlight food-summary-card">
-                        <div class="summary-highlight-icon">
-                            <svg class="ph-icon icon-22" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-bowl-food"></use></svg>
-                        </div>
-                        <div class="summary-highlight-content">
-                            <span class="summary-highlight-label">Today's solids</span>
-                            <span class="summary-highlight-value" id="todaySolidSummary">0 logged</span>
-                            <span class="summary-highlight-subtext" id="todaySolidDetails">No foods logged yet</span>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Quick Actions -->
-                <section class="actions-section">
-                    <h2 class="section-title">Quick Actions</h2>
-                    <div class="action-buttons">
-                        <button class="action-btn breastfeeding-btn" id="startBreastfeeding">
-                            <span class="action-icon">
-                                <svg class="ph-icon icon-32" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-drop"></use></svg>
+                        <div class="status-card-body">
+                            <span class="status-icon" aria-hidden="true">
+                                <svg class="ph-icon icon-32" viewBox="0 0 256 256"><use id="statusIconUse" href="phosphor-icons.svg#ph-baby"></use></svg>
                             </span>
-                            <span class="action-text">Nursing</span>
-                        </button>
-                        <button class="action-btn bottle-btn" id="logBottle">
-                            <span class="action-icon">
-                                <svg class="ph-icon icon-32" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-jar"></use></svg>
-                            </span>
-                            <span class="action-text">Bottle</span>
-                        </button>
-                        <button class="action-btn vitamin-btn" id="logVitamin">
-                            <span class="action-icon">
-                                <svg class="ph-icon icon-32" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-pill"></use></svg>
-                            </span>
-                            <span class="action-text">Vitamin</span>
-                        </button>
-                        <button class="action-btn sleep-btn" id="startSleep">
-                            <span class="action-icon">
-                                <svg class="ph-icon icon-32" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-moon-stars"></use></svg>
-                            </span>
-                            <span class="action-text">Sleep</span>
-                        </button>
+                            <div class="status-copy">
+                                <h2 class="status-title" id="statusTitle">Home status updates will appear here</h2>
+                                <p class="status-detail status-primary-detail" id="statusPrimaryDetail">Log a feeding or sleep to start the dashboard.</p>
+                                <p class="status-detail" id="statusSecondaryDetail">Today's summary updates automatically as you track.</p>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -220,6 +158,87 @@
                             <button class="timer-btn switch-btn" id="switchSideBtn">Switch Side</button>
                             <button class="timer-btn pause-btn" id="pauseTimerBtn">Pause</button>
                             <button class="timer-btn stop-btn" id="stopTimerBtn">Stop</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Today's Summary -->
+                <section class="summary-section">
+                    <h2 class="section-title">Today's Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-item feeding-summary-item">
+                            <span class="summary-item-icon" aria-hidden="true">
+                                <svg class="ph-icon icon-24" viewBox="0 0 256 256"><use href="phosphor-icons.svg#ph-jar"></use></svg>
+                            </span>
+                            <span class="summary-number" id="todayFeedings">0</span>
+                            <span class="summary-label">Feedings</span>
+                        </div>
+                        <div class="summary-item amount-summary-item">
+                            <span class="summary-item-icon" aria-hidden="true">
+                                <svg class="ph-icon icon-24" viewBox="0 0 256 256"><use href="phosphor-icons.svg#ph-drop"></use></svg>
+                            </span>
+                            <span class="summary-number" id="todayAmount">0</span>
+                            <span class="summary-label">ml total</span>
+                        </div>
+                        <div class="summary-item sleep-summary-item">
+                            <span class="summary-item-icon" aria-hidden="true">
+                                <svg class="ph-icon icon-24" viewBox="0 0 256 256"><use href="phosphor-icons.svg#ph-moon-stars"></use></svg>
+                            </span>
+                            <span class="summary-number" id="todaySleep">0h</span>
+                            <span class="summary-label">Sleep</span>
+                        </div>
+                        <div class="summary-item nap-summary-item">
+                            <span class="summary-item-icon" aria-hidden="true">
+                                <svg class="ph-icon icon-24" viewBox="0 0 256 256"><use href="phosphor-icons.svg#ph-cloud-moon"></use></svg>
+                            </span>
+                            <span class="summary-number" id="todayNaps">0</span>
+                            <span class="summary-label">Naps</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Actions -->
+                <section class="actions-section">
+                    <h2 class="section-title">Quick Actions</h2>
+                    <div class="action-buttons primary-actions">
+                        <button class="action-btn primary-action breastfeeding-btn" id="startBreastfeeding">
+                            <span class="action-icon">
+                                <svg class="ph-icon icon-32" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-drop"></use></svg>
+                            </span>
+                            <span class="action-text">Nursing</span>
+                        </button>
+                        <button class="action-btn primary-action bottle-btn" id="logBottle">
+                            <span class="action-icon">
+                                <svg class="ph-icon icon-32" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-jar"></use></svg>
+                            </span>
+                            <span class="action-text">Bottle</span>
+                        </button>
+                    </div>
+                    <div class="secondary-actions">
+                        <button class="secondary-action-btn sleep-btn" id="startSleep">
+                            <span class="secondary-action-icon">
+                                <svg class="ph-icon icon-24" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-moon-stars"></use></svg>
+                            </span>
+                            <span class="secondary-action-text">Sleep</span>
+                        </button>
+                        <button class="secondary-action-btn vitamin-btn" id="logVitamin">
+                            <span class="secondary-action-icon">
+                                <svg class="ph-icon icon-24" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-pill"></use></svg>
+                            </span>
+                            <span class="secondary-action-text">Vitamin</span>
+                        </button>
+                    </div>
+                </section>
+
+                <section class="food-section">
+                    <div class="summary-highlight food-summary-card">
+                        <div class="summary-highlight-icon">
+                            <svg class="ph-icon icon-22" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-bowl-food"></use></svg>
+                        </div>
+                        <div class="summary-highlight-content">
+                            <span class="summary-highlight-label">Today's solids</span>
+                            <span class="summary-highlight-value" id="todaySolidSummary">0 logged</span>
+                            <span class="summary-highlight-subtext" id="todaySolidDetails">No foods logged yet</span>
                         </div>
                     </div>
                 </section>
