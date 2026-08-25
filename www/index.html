@@ -159,7 +159,7 @@
                                 <svg class="ph-icon icon-24" viewBox="0 0 256 256"><use href="phosphor-icons.svg#ph-drop"></use></svg>
                             </span>
                             <span class="summary-number" id="todayAmount">0</span>
-                            <span class="summary-label">ml total</span>
+                            <span class="summary-label">ml</span>
                         </div>
                         <div class="summary-item sleep-summary-item">
                             <span class="summary-item-icon" aria-hidden="true">
@@ -238,9 +238,11 @@
                     <div class="date-display" id="feedingDateDisplay">
                         <span class="date-title">Today</span>
                         <span class="date-subtitle">--</span>
+                        <input type="date" class="date-jump-input" id="feedingDatePicker" aria-label="Jump to a date">
                     </div>
                     <button class="date-nav-btn" id="feedingNextDay" aria-label="Next day"><svg class="ph-icon icon-18" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-caret-right"></use></svg></button>
                 </div>
+                <button class="date-today-btn hidden" id="feedingTodayBtn">Back to today</button>
                 <div class="log-list" id="feedingLogList">
                     <div class="empty-state">
                         <div class="empty-icon">
@@ -265,9 +267,11 @@
                     <div class="date-display" id="foodDateDisplay">
                         <span class="date-title">Today</span>
                         <span class="date-subtitle">--</span>
+                        <input type="date" class="date-jump-input" id="foodDatePicker" aria-label="Jump to a date">
                     </div>
                     <button class="date-nav-btn" id="foodNextDay" aria-label="Next day"><svg class="ph-icon icon-18" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-caret-right"></use></svg></button>
                 </div>
+                <button class="date-today-btn hidden" id="foodTodayBtn">Back to today</button>
                 <div class="log-list" id="foodLogList">
                     <div class="empty-state">
                         <div class="empty-icon"><svg class="ph-icon icon-48" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-bowl-food"></use></svg></div>
@@ -290,12 +294,20 @@
                     <div class="date-display" id="sleepDateDisplay">
                         <span class="date-title">Today</span>
                         <span class="date-subtitle">--</span>
+                        <input type="date" class="date-jump-input" id="sleepDatePicker" aria-label="Jump to a date">
                     </div>
                     <button class="date-nav-btn" id="sleepNextDay" aria-label="Next day"><svg class="ph-icon icon-18" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-caret-right"></use></svg></button>
                 </div>
+                <button class="date-today-btn hidden" id="sleepTodayBtn">Back to today</button>
                 <div class="sleep-summary" id="sleepSummary">
                     <div class="sleep-bar-container">
-                        <div class="sleep-bar" id="sleepBar"></div>
+                        <div class="sleep-interval-track" id="sleepIntervalTrack"></div>
+                    </div>
+                    <div class="sleep-axis" aria-hidden="true">
+                        <span>6 AM</span>
+                        <span>12 PM</span>
+                        <span>6 PM</span>
+                        <span>12 AM</span>
                     </div>
                     <div class="sleep-total">
                         <span id="sleepTotalHours">0h 0m</span> total sleep

@@ -247,7 +247,34 @@ function getFeedingElapsedMs(feeding) {
 
 // Track last synced Live Activity state to avoid redundant updates
 let lastLiveActivitySyncKey = '';
-let nativeIntentGuardUntil = 0; // timestamp - skip sync until this time (intent is controlling Activity)
+
+function getActiveLiveSession() {
+    if (state.activeTimer) {
+        return {
+            session: state.activeTimer,
+            collection: COLLECTIONS.feedings,
+            kind: 'breast',
+            label: 'Feeding',
+            title: `Breastfeeding ${state.activeTimer.side?.toUpperCase() || ''}`.trim()
+        };
+    }
+    if (state.activeSleep) {
+        return {
+            session: state.activeSleep,
+            collection: COLLECTIONS.sleeps,
+            kind: state.activeSleep.type || 'sleep',
+            label: 'Sleep',
+            title: state.activeSleep.type === 'nap' ? 'Nap Timer' : 'Night Sleep'
+        };
+    }
+    return null;
+}
+
+// When this side last changed the session. Sessions created before the field existed
+// fall back to their start time, which is always older than any Live Activity press.
+function sessionUpdatedAt(session) {
+    return session.updatedAt || session.startTime || 0;
+}
 
 async function syncNativeLiveActivity() {
     const plugin = getNativeTimerLiveActivityPlugin();
@@ -262,68 +289,49 @@ async function syncNativeLiveActivity() {
     }
     if (!nativeCapabilities.supportsLiveActivities) return;
 
-    // Skip sync if an intent recently updated the Activity directly
-    // (prevents JS from overwriting the intent's visual update before the command is processed)
-    if (Date.now() < nativeIntentGuardUntil) return;
-
     try {
-        if (state.activeTimer) {
-            const paused = !!state.activeTimer.isPaused;
-            const totalPausedMs = state.activeTimer.totalPausedMs || 0;
-            const pausedElapsedMs = paused
-                ? (state.activeTimer.pauseStartTime - state.activeTimer.startTime - totalPausedMs)
-                : 0;
-            const syncKey = `breast:${state.activeTimer.id}:${paused}:${totalPausedMs}`;
-
-            if (syncKey !== lastLiveActivitySyncKey) {
-                await plugin.startOrUpdate({
-                    sessionId: state.activeTimer.id,
-                    timerKind: 'breast',
-                    title: `Breastfeeding ${state.activeTimer.side?.toUpperCase() || ''}`.trim(),
-                    startTimestamp: state.activeTimer.startTime,
-                    totalPausedMs: totalPausedMs,
-                    paused: paused,
-                    pausedElapsedMs: Math.max(0, pausedElapsedMs)
-                });
-                lastLiveActivitySyncKey = syncKey;
-            }
-            return;
-        }
-
-        if (state.activeSleep) {
-            const paused = !!state.activeSleep.isPaused;
-            const totalPausedMs = state.activeSleep.totalPausedMs || 0;
-            const pausedElapsedMs = paused
-                ? (state.activeSleep.pauseStartTime - state.activeSleep.startTime - totalPausedMs)
-                : 0;
-            const syncKey = `${state.activeSleep.type}:${state.activeSleep.id}:${paused}:${totalPausedMs}`;
-
-            if (syncKey !== lastLiveActivitySyncKey) {
-                await plugin.startOrUpdate({
-                    sessionId: state.activeSleep.id,
-                    timerKind: state.activeSleep.type || 'sleep',
-                    title: state.activeSleep.type === 'nap' ? 'Nap Timer' : 'Night Sleep',
-                    startTimestamp: state.activeSleep.startTime,
-                    totalPausedMs: totalPausedMs,
-                    paused: paused,
-                    pausedElapsedMs: Math.max(0, pausedElapsedMs)
-                });
-                lastLiveActivitySyncKey = syncKey;
-            }
-            return;
-        }
+        const active = getActiveLiveSession();
 
         // No active timer — stop Live Activity if one was running
-        if (lastLiveActivitySyncKey !== '') {
-            await plugin.stop();
-            lastLiveActivitySyncKey = '';
+        if (!active) {
+            if (lastLiveActivitySyncKey !== '') {
+                await plugin.stop();
+                lastLiveActivitySyncKey = '';
+            }
+            return;
         }
+
+        const { session, kind, title } = active;
+        const pausedAtMs = session.isPaused ? session.pauseStartTime : null;
+        const totalPausedMs = session.totalPausedMs || 0;
+        const syncKey = `${kind}:${session.id}:${pausedAtMs}:${totalPausedMs}`;
+        if (syncKey === lastLiveActivitySyncKey) return;
+
+        // No guard flags here any more. `updatedAtMs` settles it: a push carrying an
+        // older stamp than the Live Activity's own state is refused natively, so a
+        // stale sync from a render path can no longer undo a button press.
+        await plugin.startOrUpdate({
+            sessionId: session.id,
+            timerKind: kind,
+            title: title,
+            startTimestamp: session.startTime,
+            totalPausedMs: totalPausedMs,
+            pausedAtMs: pausedAtMs,
+            updatedAtMs: sessionUpdatedAt(session)
+        });
+        lastLiveActivitySyncKey = syncKey;
     } catch (error) {
         console.warn('Native Live Activity sync failed:', error);
     }
 }
 
-async function pollNativeLiveActivityCommand() {
+// Pull the Live Activity's own state and adopt it when it is newer than ours.
+//
+// This replaces replaying a "toggle" command. A toggle had to arrive exactly once to
+// be correct, and it travelled through a single-slot mailbox that dropped one of two
+// quick taps — after which the app's idea of paused disagreed with the screen for the
+// rest of the session. An absolute snapshot is idempotent.
+async function reconcileFromLiveActivity() {
     const plugin = getNativeTimerLiveActivityPlugin();
     if (!isNativeCapacitorApp()) return;
     if (!plugin) return;
@@ -334,31 +342,35 @@ async function pollNativeLiveActivityCommand() {
     lastNativeCommandPollAt = now;
 
     try {
-        const result = await plugin.fetchPendingCommand();
-        if (!result?.hasCommand) return;
+        const snap = await plugin.fetchLiveState();
+        if (!snap?.hasState) return;
+        if (snap.source !== 'intent') return;
 
-        // Intent already updated the Activity visually. Guard against JS sync
-        // overwriting it while we process the command and update JS state.
-        nativeIntentGuardUntil = Date.now() + 10000; // 10s guard
+        const active = getActiveLiveSession();
+        if (!active || active.session.id !== snap.sessionId) return;
+        if (!(snap.updatedAtMs > sessionUpdatedAt(active.session))) return;
 
-        if (result.action === 'toggle-live-pause') {
-            if (state.activeTimer) await togglePauseActiveBreastfeeding();
-            else if (state.activeSleep) await togglePauseActiveSleep();
+        const updated = { ...active.session, updatedAt: snap.updatedAtMs };
+
+        if (snap.stopped) {
+            // End where the counter actually stood, not where this side thinks it is.
+            updated.endTime = Math.round(snap.pausedAtMs ?? snap.stoppedAtMs ?? snap.updatedAtMs);
+            updated.isPaused = false;
+            updated.pauseStartTime = null;
+            await saveDoc(active.collection, updated);
+            lastLiveActivitySyncKey = '';
+            const total = updated.endTime - updated.startTime - (updated.totalPausedMs || 0);
+            showToast(`${active.label} saved: ${formatDuration(total)}`);
+            return;
         }
 
-        if (result.action === 'stop-live-timer') {
-            if (state.activeTimer) await stopActiveBreastfeeding();
-            else if (state.activeSleep) await stopActiveSleep();
-        }
-
-        // Clear the intent guard — JS state is now up-to-date, safe to sync
-        nativeIntentGuardUntil = 0;
-
-        // Force immediate Live Activity update after processing command
+        updated.totalPausedMs = Math.round(snap.totalPausedMs || 0);
+        updated.isPaused = snap.pausedAtMs != null;
+        updated.pauseStartTime = snap.pausedAtMs != null ? Math.round(snap.pausedAtMs) : null;
+        await saveDoc(active.collection, updated);
         lastLiveActivitySyncKey = '';
-        await syncNativeLiveActivity();
     } catch (error) {
-        console.warn('Native command poll failed:', error);
+        console.warn('Live Activity state reconcile failed:', error);
     }
 }
 
@@ -610,7 +622,7 @@ async function stopActiveBreastfeeding() {
     if (!state.activeTimer) return;
 
     const now = Date.now();
-    const feeding = { ...state.activeTimer };
+    const feeding = { ...state.activeTimer, updatedAt: now };
 
     if (feeding.isPaused) {
         feeding.endTime = feeding.pauseStartTime;
@@ -628,7 +640,7 @@ async function togglePauseActiveBreastfeeding() {
     if (!state.activeTimer) return;
 
     const now = Date.now();
-    const updated = { ...state.activeTimer };
+    const updated = { ...state.activeTimer, updatedAt: now };
 
     if (updated.isPaused) {
         updated.totalPausedMs = (updated.totalPausedMs || 0) + (now - updated.pauseStartTime);
@@ -647,7 +659,7 @@ async function stopActiveSleep() {
     if (!state.activeSleep) return;
 
     const now = Date.now();
-    const sleep = { ...state.activeSleep };
+    const sleep = { ...state.activeSleep, updatedAt: now };
 
     if (sleep.isPaused) {
         sleep.endTime = sleep.pauseStartTime;
@@ -665,7 +677,7 @@ async function togglePauseActiveSleep() {
     if (!state.activeSleep) return;
 
     const now = Date.now();
-    const updated = { ...state.activeSleep };
+    const updated = { ...state.activeSleep, updatedAt: now };
 
     if (updated.isPaused) {
         updated.totalPausedMs = (updated.totalPausedMs || 0) + (now - updated.pauseStartTime);
@@ -816,7 +828,7 @@ function evaluateThresholdAlerts() {
     if (!state.user) return;
     evaluateAwakeAlert();
     evaluateSleepAlert();
-    pollNativeLiveActivityCommand();
+    reconcileFromLiveActivity();
     handlePendingNotificationAction().catch((error) => {
         console.error('Pending action handler failed:', error);
     });
@@ -834,9 +846,8 @@ function startNotificationEngine() {
     if (isNativeCapacitorApp()) {
         const handleForegroundResume = async () => {
             lastNativeCommandPollAt = 0;
-            // MUST await command poll first — if the intent paused/stopped the timer,
-            // we need to update JS state BEFORE syncing to avoid overwriting the intent's change
-            await pollNativeLiveActivityCommand();
+            // Adopt the Live Activity's state before pushing anything back.
+            await reconcileFromLiveActivity();
             lastLiveActivitySyncKey = '';
             await syncNativeLiveActivity();
         };
@@ -1003,6 +1014,64 @@ function getEndOfDay(date) {
     const d = new Date(date);
     d.setHours(23, 59, 59, 999);
     return d;
+}
+
+function isSameDay(a, b) {
+    return getStartOfDay(a).getTime() === getStartOfDay(b).getTime();
+}
+
+// `<input type="date">` wants local YYYY-MM-DD. toISOString() would shift the day
+// for anyone west of UTC, which is most of the evening here.
+function toDateInputValue(date) {
+    const d = new Date(date);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Prev/next arrows, tap-the-date-to-jump, and a "back to today" shortcut.
+// Shared by the feeding, food and sleep logs — they all use the same markup.
+function initDateNav(kind, getDate, setDate, render) {
+    const step = (days) => {
+        const next = new Date(getDate());
+        next.setDate(next.getDate() + days);
+        setDate(next);
+        render();
+    };
+
+    document.getElementById(`${kind}PrevDay`)?.addEventListener('click', () => step(-1));
+    document.getElementById(`${kind}NextDay`)?.addEventListener('click', () => step(1));
+
+    document.getElementById(`${kind}DatePicker`)?.addEventListener('change', (event) => {
+        const value = event.target.value;
+        if (!value) return;
+        const [year, month, day] = value.split('-').map(Number);
+        setDate(new Date(year, month - 1, day));
+        render();
+    });
+
+    document.getElementById(`${kind}TodayBtn`)?.addEventListener('click', () => {
+        setDate(new Date());
+        render();
+    });
+}
+
+// Keeps the picker value, the today shortcut and the next-day cap in step with
+// whichever day is on screen. Called from each render.
+function syncDateNav(kind, date) {
+    const now = new Date();
+    const atToday = isSameDay(date, now);
+
+    const picker = document.getElementById(`${kind}DatePicker`);
+    if (picker) {
+        picker.value = toDateInputValue(date);
+        picker.max = toDateInputValue(now);
+    }
+
+    document.getElementById(`${kind}TodayBtn`)?.classList.toggle('hidden', atToday);
+
+    // Nothing is ever logged in the future, so stop the arrow there.
+    const nextBtn = document.getElementById(`${kind}NextDay`);
+    if (nextBtn) nextBtn.disabled = getStartOfDay(date) >= getStartOfDay(now);
 }
 
 function getLocalDateTimeString(date = new Date()) {
@@ -1651,6 +1720,7 @@ function initBreastfeeding() {
             id: generateId(),
             type: 'breast',
             startTime: Date.now(),
+            updatedAt: Date.now(),
             endTime: null,
             side: side,
             notes: notes || null
@@ -1883,6 +1953,7 @@ function initSleep() {
         const sleep = {
             id: generateId(),
             startTime: Date.now(),
+            updatedAt: Date.now(),
             endTime: null,
             type: type,
             location: location || null
@@ -1945,6 +2016,7 @@ function renderFeedingLog() {
         display.querySelector('.date-title').textContent = title;
         display.querySelector('.date-subtitle').textContent = subtitle;
     }
+    syncDateNav('feeding', date);
 
     // Listeners already keep state.feedings up to date
     const feedings = state.feedings
@@ -2027,15 +2099,7 @@ function renderFeedingLog() {
 }
 
 function initFeedingLog() {
-    document.getElementById('feedingPrevDay').addEventListener('click', () => {
-        state.currentFeedingDate.setDate(state.currentFeedingDate.getDate() - 1);
-        renderFeedingLog();
-    });
-
-    document.getElementById('feedingNextDay').addEventListener('click', () => {
-        state.currentFeedingDate.setDate(state.currentFeedingDate.getDate() + 1);
-        renderFeedingLog();
-    });
+    initDateNav('feeding', () => state.currentFeedingDate, (date) => { state.currentFeedingDate = date; }, renderFeedingLog);
 
     document.getElementById('addFeedingBtn').addEventListener('click', () => {
         document.getElementById('bottleTime').value = getLocalDateTimeString();
@@ -2055,6 +2119,7 @@ function renderFoodLog() {
         display.querySelector('.date-title').textContent = title;
         display.querySelector('.date-subtitle').textContent = subtitle;
     }
+    syncDateNav('food', date);
 
     const foods = state.solids
         .filter(entry => entry.startTime >= startOfDay && entry.startTime <= endOfDay);
@@ -2107,15 +2172,7 @@ function renderFoodLog() {
 }
 
 function initFoodLog() {
-    document.getElementById('foodPrevDay').addEventListener('click', () => {
-        state.currentFoodDate.setDate(state.currentFoodDate.getDate() - 1);
-        renderFoodLog();
-    });
-
-    document.getElementById('foodNextDay').addEventListener('click', () => {
-        state.currentFoodDate.setDate(state.currentFoodDate.getDate() + 1);
-        renderFoodLog();
-    });
+    initDateNav('food', () => state.currentFoodDate, (date) => { state.currentFoodDate = date; }, renderFoodLog);
 
     document.getElementById('addFoodBtn').addEventListener('click', () => {
         resetSolidFoodForm();
@@ -2339,21 +2396,43 @@ function renderSleepLog() {
         display.querySelector('.date-title').textContent = title;
         display.querySelector('.date-subtitle').textContent = subtitle;
     }
+    syncDateNav('sleep', date);
 
     const sleeps = state.sleeps
-        .filter(s => s.startTime >= startOfDay && s.startTime <= endOfDay);
+        .filter((sleep) => {
+            const sleepEnd = sleep.endTime || Date.now();
+            return sleep.startTime <= endOfDay && sleepEnd >= startOfDay;
+        });
 
-    // Calculate total sleep and update bar
+    const intervalTrack = document.getElementById('sleepIntervalTrack');
+
+    if (intervalTrack) {
+        const ticks = [0, 6, 12, 18, 24]
+            .map(() => '<span class="sleep-tick"></span>')
+            .join('');
+
+        const segments = sleeps.map((sleep) => {
+            const segmentStart = Math.max(sleep.startTime, startOfDay);
+            const segmentEnd = Math.min(sleep.endTime || Date.now(), endOfDay);
+            const startPercent = ((segmentStart - startOfDay) / 86400000) * 100;
+            const widthPercent = Math.max(((segmentEnd - segmentStart) / 86400000) * 100, 1.5);
+            const segmentClass = sleep.type === 'nap' ? 'sleep-interval-segment nap' : 'sleep-interval-segment night';
+            return `<span class="${segmentClass}" style="left:${startPercent}%;width:${widthPercent}%;"></span>`;
+        }).join('');
+
+        intervalTrack.innerHTML = `
+            ${segments}
+            <div class="sleep-tick-layer" aria-hidden="true">${ticks}</div>
+        `;
+    }
+
     const totalSleepMs = sleeps.reduce((sum, s) => {
-        const end = s.endTime || Date.now();
-        return sum + (end - s.startTime);
+        const segmentStart = Math.max(s.startTime, startOfDay);
+        const segmentEnd = Math.min(s.endTime || Date.now(), endOfDay);
+        return sum + Math.max(0, segmentEnd - segmentStart - (s.totalPausedMs || 0));
     }, 0);
 
     const sleepHours = totalSleepMs / 3600000;
-    const maxHours = 16;
-    const percentage = Math.min((sleepHours / maxHours) * 100, 100);
-
-    document.getElementById('sleepBar').style.width = `${percentage}%`;
     document.getElementById('sleepTotalHours').textContent = `${Math.floor(sleepHours)}h ${Math.floor((sleepHours % 1) * 60)}m`;
 
     const list = document.getElementById('sleepLogList');
@@ -2411,15 +2490,7 @@ function renderSleepLog() {
 }
 
 function initSleepLog() {
-    document.getElementById('sleepPrevDay').addEventListener('click', () => {
-        state.currentSleepDate.setDate(state.currentSleepDate.getDate() - 1);
-        renderSleepLog();
-    });
-
-    document.getElementById('sleepNextDay').addEventListener('click', () => {
-        state.currentSleepDate.setDate(state.currentSleepDate.getDate() + 1);
-        renderSleepLog();
-    });
+    initDateNav('sleep', () => state.currentSleepDate, (date) => { state.currentSleepDate = date; }, renderSleepLog);
 
     document.getElementById('addSleepBtn').addEventListener('click', () => {
         openModal('sleepModal');

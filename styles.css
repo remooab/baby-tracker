@@ -166,6 +166,8 @@
 html {
     font-size: 16px;
     -webkit-tap-highlight-color: transparent;
+    height: 100%;
+    overflow: hidden;
 }
 
 body {
@@ -173,7 +175,9 @@ body {
     background: var(--bg-primary);
     color: var(--text-primary);
     line-height: 1.5;
-    min-height: 100vh;
+    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -192,12 +196,25 @@ select {
 }
 
 #app {
-    min-height: 100vh;
-    padding-bottom: 80px;
+    position: relative;
+    min-height: 100%;
+    height: 100%;
+    overflow: hidden;
+    padding-bottom: 0;
 }
 
 .screen {
     display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: 24px;
     animation: fadeIn 0.25s ease;
 }
 
@@ -218,7 +235,7 @@ select {
 }
 
 .bottom-nav {
-    position: fixed;
+    position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
@@ -232,6 +249,7 @@ select {
     z-index: 100;
     border-radius: 0;
     border-top: 1px solid var(--card-border);
+    transform: translateZ(0);
 }
 
 .nav-item {
@@ -690,8 +708,8 @@ select {
 }
 
 #homeScreen {
-    position: relative;
-    overflow: hidden;
+    /* NOTE: do not set position/overflow here - `.screen` owns the scroll
+       container for every screen, and an #id rule would out-specify it. */
     background:
         radial-gradient(circle at top left, var(--home-ornament-a), transparent 32%),
         radial-gradient(circle at 100% 24%, var(--home-ornament-b), transparent 28%),
@@ -926,10 +944,16 @@ select {
     background: var(--bg-card);
     border: 1px solid var(--card-border);
     border-radius: 20px;
-    padding: 16px 12px 14px;
+    /* Narrow horizontal padding: four tiles across a 375px screen leave the label
+       barely 47px, which is what forced "Feedings" to break mid-word. */
+    padding: 16px 8px 14px;
+    min-width: 0;
     text-align: center;
     box-shadow: var(--shadow-sm);
     backdrop-filter: blur(18px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .summary-item-icon {
@@ -964,7 +988,8 @@ select {
 
 .summary-number {
     display: block;
-    font-size: 1.45rem;
+    max-width: 100%;
+    font-size: clamp(1rem, 4.8vw, 1.45rem);
     line-height: 1.1;
     font-weight: 800;
     color: var(--text-primary);
@@ -972,7 +997,11 @@ select {
 }
 
 .summary-label {
-    font-size: 0.84rem;
+    max-width: 100%;
+    /* Scales down to fit the tile instead of breaking the word. `overflow-wrap:
+       anywhere` is deliberately absent — splitting a label mid-word ("Feedin/gs")
+       is worse than any overflow it was guarding against. */
+    font-size: clamp(0.7rem, 3.1vw, 0.84rem);
     color: var(--text-secondary);
     font-weight: 600;
     line-height: 1.2;
@@ -1172,11 +1201,50 @@ select {
 }
 
 .date-display {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-width: 120px;
+}
+
+/* A real date input laid transparently over the date label: tapping the date
+   opens the system picker directly, with no scripted showPicker() involved. */
+.date-jump-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    border: none;
+    background: none;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+/* Dotted underline hints the date is tappable. */
+.date-display .date-title {
+    border-bottom: 1px dashed var(--card-border);
+    padding-bottom: 2px;
+}
+
+.date-nav-btn:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.date-today-btn {
+    display: block;
+    margin: -12px auto 20px;
+    padding: 6px 16px;
+    border-radius: 9999px;
+    background: var(--bg-card);
+    border: 1px solid var(--card-border);
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
 .date-title {
@@ -1201,18 +1269,57 @@ select {
 }
 
 .sleep-bar-container {
-    height: 24px;
+    position: relative;
+    height: 32px;
     background: var(--bg-primary);
     border-radius: 9999px;
     overflow: hidden;
     margin-bottom: 8px;
+    border: 1px solid var(--card-border);
 }
 
-.sleep-bar {
+.sleep-interval-track {
+    position: relative;
+    width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-sleep), var(--accent-sleep-dark));
+}
+
+.sleep-interval-segment {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
     border-radius: 9999px;
-    width: 0%;
+    background: linear-gradient(90deg, var(--accent-sleep-light), var(--accent-sleep));
+}
+
+.sleep-interval-segment.night {
+    background: linear-gradient(90deg, var(--accent-primary-light), var(--accent-primary));
+}
+
+.sleep-tick-layer {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 10px;
+}
+
+.sleep-tick {
+    width: 1px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.sleep-axis {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 0 2px;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
 }
 
 .sleep-total {
@@ -2070,26 +2177,16 @@ select {
     }
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg-primary: #1a1a2e;
-        --bg-secondary: #25253a;
-        --bg-card: #2d2d44;
-        --text-primary: #f0f0f5;
-        --text-secondary: #a0a0b0;
-        --text-muted: #707080;
-        --accent-primary: #8aa8c0;
-    }
-}
-
 /* ===== Auth Screens ===== */
 #authContainer {
-    min-height: 100vh;
+    min-height: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
     padding: 24px;
+    overflow-y: auto;
 }
 
 .auth-screen {
@@ -2141,6 +2238,44 @@ select {
 
 .auth-header p {
     color: var(--text-secondary);
+}
+
+@media (prefers-color-scheme: dark) {
+    .breastfeeding-btn,
+    .bottle-btn,
+    .sleep-btn,
+    .vitamin-btn {
+        color: #202536;
+    }
+
+    #homeScreen .primary-action .action-icon,
+    .secondary-action-icon {
+        background: rgba(255, 255, 255, 0.34);
+        color: #202536;
+    }
+
+    #homeScreen .primary-action .action-text,
+    .secondary-action-text {
+        color: #202536;
+    }
+
+    .food-summary-card {
+        background: linear-gradient(135deg, rgba(243, 235, 199, 0.28), rgba(255, 255, 255, 0.08));
+    }
+
+    .food-summary-card .summary-highlight-label {
+        color: rgba(247, 248, 252, 0.8);
+    }
+
+    .food-summary-card .summary-highlight-value,
+    .food-summary-card .summary-highlight-subtext {
+        color: #F5F7FB;
+    }
+
+    .food-summary-card .summary-highlight-icon {
+        background: rgba(243, 235, 199, 0.42);
+        color: #D9B662;
+    }
 }
 
 .auth-form .form-group {

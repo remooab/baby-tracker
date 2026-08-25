@@ -13,6 +13,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        LiveActivityStore.purgeLegacyKeys()
         return true
     }
 
@@ -63,139 +64,77 @@ extension AppDelegate {
     }
 }
 
-enum BabyTimerBridgeKeys {
-    static let appGroupId = "group.com.trueinspo.babytracker"
-    static let activeSessionId = "liveActivity.sessionId"
-    static let activeTimerKind = "liveActivity.timerKind"
-    static let pendingAction = "liveActivity.pendingAction"
-}
-
 #if canImport(ActivityKit)
-@available(iOS 16.1, *)
-struct BabyTimerLiveAttributes: ActivityAttributes {
-    public struct ContentState: Codable, Hashable {
-        var title: String
-        var startDate: Date
-        var totalPausedSeconds: Int
-        var paused: Bool
-        var pausedElapsedSeconds: Int
-    }
-
-    var sessionId: String
-    var timerKind: String
-}
-
-@available(iOS 16.1, *)
+@available(iOS 16.2, *)
 final class BabyTimerLiveActivityManager {
     static let shared = BabyTimerLiveActivityManager()
-    private var activity: Activity<BabyTimerLiveAttributes>?
 
-    private init() {
-        // Recover any existing Live Activity from a previous app session
-        recoverExistingActivity()
-    }
+    private init() {}
 
-    private func recoverExistingActivity() {
-        let existing = Activity<BabyTimerLiveAttributes>.activities
-        if let first = existing.first {
-            activity = first
-            print("[LiveActivity] Recovered existing activity: \(first.id)")
+    /// The activity for a session, ending any duplicates left over from a previous run.
+    private func activity(for sessionId: String) -> Activity<BabyTimerLiveAttributes>? {
+        let matching = Activity<BabyTimerLiveAttributes>.activities
+            .filter { $0.attributes.sessionId == sessionId }
+        guard let keep = matching.max(by: { $0.content.state.updatedAt < $1.content.state.updatedAt })
+        else { return nil }
+
+        for extra in matching where extra.id != keep.id {
+            Task { await extra.end(nil, dismissalPolicy: .immediate) }
         }
-        // End any extras beyond the first
-        if existing.count > 1 {
-            Task {
-                for extra in existing.dropFirst() {
-                    let endState = BabyTimerLiveAttributes.ContentState(
-                        title: "Timer complete",
-                        startDate: Date(),
-                        totalPausedSeconds: 0,
-                        paused: true,
-                        pausedElapsedSeconds: 0
-                    )
-                    if #available(iOS 16.2, *) {
-                        await extra.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
-                    } else {
-                        await extra.end(using: endState, dismissalPolicy: .immediate)
-                    }
-                }
-            }
-        }
+        return keep
     }
 
     func startOrUpdate(sessionId: String, timerKind: String, title: String,
-                       startDate: Date, totalPausedSeconds: Int, paused: Bool,
-                       pausedElapsedSeconds: Int) async -> Bool {
-        let attributes = BabyTimerLiveAttributes(sessionId: sessionId, timerKind: timerKind)
+                       startDate: Date, totalPaused: TimeInterval,
+                       pausedAt: Date?, updatedAt: Date) async -> Bool {
         let state = BabyTimerLiveAttributes.ContentState(
             title: title,
             startDate: startDate,
-            totalPausedSeconds: totalPausedSeconds,
-            paused: paused,
-            pausedElapsedSeconds: pausedElapsedSeconds
+            totalPaused: totalPaused,
+            pausedAt: pausedAt,
+            updatedAt: updatedAt
         )
 
-        if let existing = activity, existing.attributes.sessionId == sessionId {
-            // Check if a Live Activity intent recently changed the state.
-            // If the intent set the Activity to paused but JS still thinks it's running,
-            // skip this update to avoid overwriting the intent's visual change.
-            if let defaults = UserDefaults(suiteName: BabyTimerBridgeKeys.appGroupId) {
-                defaults.synchronize()
-                if defaults.string(forKey: BabyTimerBridgeKeys.pendingAction) != nil {
-                    // Intent wrote a command that JS hasn't processed yet — skip overwrite
-                    print("[LiveActivity] Skipping update — pending intent command exists")
-                    return true
-                }
-            }
+        if let existing = activity(for: sessionId) {
+            // Last writer wins. This one check replaces the three guard layers that
+            // used to try to stop the web layer from stomping on a button press:
+            // a press always carries a newer `updatedAt` than the state the web
+            // layer is still holding, so a stale push simply loses.
+            guard existing.content.state.updatedAt <= updatedAt else { return true }
 
-            if #available(iOS 16.2, *) {
-                await existing.update(ActivityContent(state: state, staleDate: nil))
-            } else {
-                await existing.update(using: state)
-            }
+            await existing.update(ActivityContent(state: state, staleDate: nil))
+            LiveActivityStore.save(BabyTimerSnapshot(
+                state: state, sessionId: sessionId, timerKind: timerKind, source: "app"
+            ))
             return true
         }
 
-        if let existing = activity {
-            if #available(iOS 16.2, *) {
-                await existing.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate)
-            } else {
-                await existing.end(using: state, dismissalPolicy: .immediate)
-            }
-            activity = nil
+        // Switching sessions — retire anything still on screen first.
+        for stale in Activity<BabyTimerLiveAttributes>.activities {
+            await stale.end(nil, dismissalPolicy: .immediate)
         }
 
         do {
-            activity = try Activity<BabyTimerLiveAttributes>.request(
-                attributes: attributes,
-                contentState: state,
+            _ = try Activity<BabyTimerLiveAttributes>.request(
+                attributes: BabyTimerLiveAttributes(sessionId: sessionId, timerKind: timerKind),
+                content: ActivityContent(state: state, staleDate: nil),
                 pushType: nil
             )
+            LiveActivityStore.save(BabyTimerSnapshot(
+                state: state, sessionId: sessionId, timerKind: timerKind, source: "app"
+            ))
             return true
         } catch {
-            print("Live Activity request failed:", error.localizedDescription)
+            print("[LiveActivity] request failed:", error.localizedDescription)
             return false
         }
     }
 
     func stop() async {
-        // End ALL existing activities (including orphaned ones from previous sessions)
-        let allActivities = Activity<BabyTimerLiveAttributes>.activities
-        let endState = BabyTimerLiveAttributes.ContentState(
-            title: "Timer complete",
-            startDate: Date(),
-            totalPausedSeconds: 0,
-            paused: true,
-            pausedElapsedSeconds: 0
-        )
-
-        for act in allActivities {
-            if #available(iOS 16.2, *) {
-                await act.end(ActivityContent(state: endState, staleDate: nil), dismissalPolicy: .immediate)
-            } else {
-                await act.end(using: endState, dismissalPolicy: .immediate)
-            }
+        for act in Activity<BabyTimerLiveAttributes>.activities {
+            await act.end(nil, dismissalPolicy: .immediate)
         }
-        activity = nil
+        LiveActivityStore.clear()
     }
 }
 #endif
@@ -263,29 +202,26 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openNativeSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPlatformCapabilities", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "fetchPendingCommand", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "fetchLiveState", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getNotificationPermission", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestNotificationPermission", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sendLocalNotification", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clearLocalNotification", returnType: CAPPluginReturnPromise)
     ]
 
-    private var bridgeDefaults: UserDefaults? {
-        return UserDefaults(suiteName: BabyTimerBridgeKeys.appGroupId)
-    }
-
     @objc func startOrUpdate(_ call: CAPPluginCall) {
         let sessionId = call.getString("sessionId") ?? "session"
         let timerKind = call.getString("timerKind") ?? "timer"
         let title = call.getString("title") ?? "Baby Timer"
-        let startTimestamp = call.getDouble("startTimestamp") ?? (Date().timeIntervalSince1970 * 1000)
-        let totalPausedMs = call.getInt("totalPausedMs") ?? 0
-        let paused = call.getBool("paused") ?? false
-        let pausedElapsedMs = call.getInt("pausedElapsedMs") ?? 0
+        let nowMs = Date().timeIntervalSince1970 * 1000
+        // Doubles throughout: `call.getInt` plus `ms / 1000` integer division used to
+        // discard the sub-second part of every value crossing this bridge.
+        let startMs = call.getDouble("startTimestamp") ?? nowMs
+        let totalPausedMs = call.getDouble("totalPausedMs") ?? 0
+        let pausedAtMs = call.getDouble("pausedAtMs")
+        let updatedAtMs = call.getDouble("updatedAtMs") ?? nowMs
 
-        let startDate = Date(timeIntervalSince1970: startTimestamp / 1000.0)
-
-        guard #available(iOS 16.1, *) else {
+        guard #available(iOS 16.2, *) else {
             call.resolve(["ok": false, "reason": "ios-version-too-low"])
             return
         }
@@ -295,33 +231,23 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                 sessionId: sessionId,
                 timerKind: timerKind,
                 title: title,
-                startDate: startDate,
-                totalPausedSeconds: totalPausedMs / 1000,
-                paused: paused,
-                pausedElapsedSeconds: pausedElapsedMs / 1000
+                startDate: BabyTimerSnapshot.date(startMs),
+                totalPaused: totalPausedMs / 1000,
+                pausedAt: pausedAtMs.map(BabyTimerSnapshot.date),
+                updatedAt: BabyTimerSnapshot.date(updatedAtMs)
             )
-
-            if success {
-                bridgeDefaults?.set(sessionId, forKey: BabyTimerBridgeKeys.activeSessionId)
-                bridgeDefaults?.set(timerKind, forKey: BabyTimerBridgeKeys.activeTimerKind)
-                bridgeDefaults?.synchronize()
-            }
-
             call.resolve(["ok": success])
         }
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        guard #available(iOS 16.1, *) else {
+        guard #available(iOS 16.2, *) else {
             call.resolve(["ok": false, "reason": "ios-version-too-low"])
             return
         }
 
         Task {
             await BabyTimerLiveActivityManager.shared.stop()
-            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.activeSessionId)
-            bridgeDefaults?.removeObject(forKey: BabyTimerBridgeKeys.activeTimerKind)
-            bridgeDefaults?.synchronize()
             call.resolve(["ok": true])
         }
     }
@@ -337,7 +263,7 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func getPlatformCapabilities(_ call: CAPPluginCall) {
         var supportsLiveActivities = false
-        if #available(iOS 16.1, *) {
+        if #available(iOS 16.2, *) {
             supportsLiveActivities = true
         }
 
@@ -349,29 +275,32 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         ])
     }
 
-    @objc func fetchPendingCommand(_ call: CAPPluginCall) {
-        guard let defaults = bridgeDefaults else {
-            call.resolve(["hasCommand": false])
+    /// Hands the web layer the absolute state, not a command to replay.
+    ///
+    /// The old `fetchPendingCommand` popped a single "toggle" string off a one-slot
+    /// mailbox: two taps before the app drained it lost one, and the web layer's idea
+    /// of paused then permanently disagreed with the Live Activity. An absolute
+    /// snapshot is idempotent — reading it twice changes nothing.
+    @objc func fetchLiveState(_ call: CAPPluginCall) {
+        guard let snapshot = LiveActivityStore.load() else {
+            call.resolve(["hasState": false])
             return
         }
 
-        // Ensure we read the latest cross-process data
-        defaults.synchronize()
+        var result: [String: Any] = [
+            "hasState": true,
+            "sessionId": snapshot.sessionId,
+            "timerKind": snapshot.timerKind,
+            "startMs": snapshot.startMs,
+            "totalPausedMs": snapshot.totalPausedMs,
+            "updatedAtMs": snapshot.updatedAtMs,
+            "stopped": snapshot.stopped,
+            "source": snapshot.source
+        ]
+        if let pausedAtMs = snapshot.pausedAtMs { result["pausedAtMs"] = pausedAtMs }
+        if let stoppedAtMs = snapshot.stoppedAtMs { result["stoppedAtMs"] = stoppedAtMs }
 
-        guard let action = defaults.string(forKey: BabyTimerBridgeKeys.pendingAction) else {
-            call.resolve(["hasCommand": false])
-            return
-        }
-
-        defaults.removeObject(forKey: BabyTimerBridgeKeys.pendingAction)
-        defaults.synchronize()
-
-        call.resolve([
-            "hasCommand": true,
-            "action": action,
-            "sessionId": defaults.string(forKey: BabyTimerBridgeKeys.activeSessionId) ?? "",
-            "timerKind": defaults.string(forKey: BabyTimerBridgeKeys.activeTimerKind) ?? ""
-        ])
+        call.resolve(result)
     }
 
     @objc func getNotificationPermission(_ call: CAPPluginCall) {
