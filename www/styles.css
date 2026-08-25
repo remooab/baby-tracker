@@ -1048,8 +1048,8 @@ select {
 .primary-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    margin-bottom: 14px;
+    gap: 12px;
+    margin-bottom: 12px;
 }
 
 .primary-action {
@@ -1061,21 +1061,35 @@ select {
     box-shadow: var(--shadow-md);
 }
 
+/* Nursing and Bottle sit on the same footprint as Sleep and Vitamin, so the four
+   quick actions read as one set rather than a hero pair plus an afterthought. */
+#homeScreen .primary-action {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 0;
+    gap: 12px;
+    padding: 16px 18px;
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
 #homeScreen .primary-action .action-icon {
-    width: 72px;
-    height: 72px;
+    width: 44px;
+    height: 44px;
     margin-bottom: 0;
-    border-radius: 22px;
-    background: rgba(255, 255, 255, 0.4);
+    border-radius: 14px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.34);
 }
 
 #homeScreen .primary-action .action-icon svg {
-    width: 40px;
-    height: 40px;
+    width: 24px;
+    height: 24px;
 }
 
 #homeScreen .primary-action .action-text {
-    font-size: 1.18rem;
+    font-size: 0.98rem;
     font-weight: 800;
 }
 
