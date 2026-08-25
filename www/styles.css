@@ -2278,43 +2278,83 @@ select {
     color: var(--text-secondary);
 }
 
+/* Component-level dark overrides. They carry the same theme scope as the token
+   block above: without it, choosing Light on a system-dark phone left this
+   near-white text stranded on the now-light solids card. */
 @media (prefers-color-scheme: dark) {
-    .breastfeeding-btn,
-    .bottle-btn,
-    .sleep-btn,
-    .vitamin-btn {
+    :root:not([data-theme="light"]) .breastfeeding-btn,
+    :root:not([data-theme="light"]) .bottle-btn,
+    :root:not([data-theme="light"]) .sleep-btn,
+    :root:not([data-theme="light"]) .vitamin-btn {
         color: #202536;
     }
 
-    #homeScreen .primary-action .action-icon,
-    .secondary-action-icon {
+    :root:not([data-theme="light"]) #homeScreen .primary-action .action-icon,
+    :root:not([data-theme="light"]) .secondary-action-icon {
         background: rgba(255, 255, 255, 0.34);
         color: #202536;
     }
 
-    #homeScreen .primary-action .action-text,
-    .secondary-action-text {
+    :root:not([data-theme="light"]) #homeScreen .primary-action .action-text,
+    :root:not([data-theme="light"]) .secondary-action-text {
         color: #202536;
     }
 
-    .food-summary-card {
+    :root:not([data-theme="light"]) .food-summary-card {
         background: linear-gradient(135deg, rgba(243, 235, 199, 0.28), rgba(255, 255, 255, 0.08));
     }
 
-    .food-summary-card .summary-highlight-label {
+    :root:not([data-theme="light"]) .food-summary-card .summary-highlight-label {
         color: rgba(247, 248, 252, 0.8);
     }
 
-    .food-summary-card .summary-highlight-value,
-    .food-summary-card .summary-highlight-subtext {
+    :root:not([data-theme="light"]) .food-summary-card .summary-highlight-value,
+    :root:not([data-theme="light"]) .food-summary-card .summary-highlight-subtext {
         color: #F5F7FB;
     }
 
-    .food-summary-card .summary-highlight-icon {
+    :root:not([data-theme="light"]) .food-summary-card .summary-highlight-icon {
         background: rgba(243, 235, 199, 0.42);
         color: #D9B662;
     }
 }
+
+:root[data-theme="dark"] .breastfeeding-btn,
+:root[data-theme="dark"] .bottle-btn,
+:root[data-theme="dark"] .sleep-btn,
+:root[data-theme="dark"] .vitamin-btn {
+    color: #202536;
+}
+
+:root[data-theme="dark"] #homeScreen .primary-action .action-icon,
+:root[data-theme="dark"] .secondary-action-icon {
+    background: rgba(255, 255, 255, 0.34);
+    color: #202536;
+}
+
+:root[data-theme="dark"] #homeScreen .primary-action .action-text,
+:root[data-theme="dark"] .secondary-action-text {
+    color: #202536;
+}
+
+:root[data-theme="dark"] .food-summary-card {
+    background: linear-gradient(135deg, rgba(243, 235, 199, 0.28), rgba(255, 255, 255, 0.08));
+}
+
+:root[data-theme="dark"] .food-summary-card .summary-highlight-label {
+    color: rgba(247, 248, 252, 0.8);
+}
+
+:root[data-theme="dark"] .food-summary-card .summary-highlight-value,
+:root[data-theme="dark"] .food-summary-card .summary-highlight-subtext {
+    color: #F5F7FB;
+}
+
+:root[data-theme="dark"] .food-summary-card .summary-highlight-icon {
+    background: rgba(243, 235, 199, 0.42);
+    color: #D9B662;
+}
+
 
 .auth-form .form-group {
     margin-bottom: 20px;
