@@ -144,6 +144,21 @@
                     </div>
                 </section>
 
+                <!-- Awake since the last sleep ended. Sits above the summary because
+                     it is the thing that decides what happens next. -->
+                <section class="awake-section hidden" id="awakeSection">
+                    <div class="awake-card">
+                        <span class="awake-icon" aria-hidden="true">
+                            <svg class="ph-icon icon-24" viewBox="0 0 256 256"><use href="phosphor-icons.svg#ph-baby"></use></svg>
+                        </span>
+                        <div class="awake-info">
+                            <span class="awake-label" id="awakeLabel">Awake for</span>
+                            <span class="awake-time" id="awakeTime">0m</span>
+                        </div>
+                        <span class="awake-since" id="awakeSince"></span>
+                    </div>
+                </section>
+
                 <!-- Today's Summary -->
                 <section class="summary-section">
                     <h2 class="section-title">Today's Summary</h2>

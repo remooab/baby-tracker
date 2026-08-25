@@ -36,7 +36,7 @@ struct BabyTimerLiveActivityWidget: Widget {
                             .font(.system(size: 32, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .foregroundColor(accentColor(for: context.attributes.timerKind))
-                            .frame(maxWidth: 150, alignment: .leading)
+                            .frame(maxWidth: 110, alignment: .leading)
 
                         Spacer(minLength: 0)
 
@@ -80,7 +80,7 @@ struct BabyTimerLiveActivityWidget: Widget {
                     // `Text(timerInterval:)` reserves room for its widest possible
                     // value, so it is pinned rather than left to take the whole row.
                     .multilineTextAlignment(.trailing)
-                    .frame(maxWidth: 190, alignment: .trailing)
+                    .frame(maxWidth: 150, alignment: .trailing)
             }
         }
     }
@@ -100,12 +100,15 @@ struct BabyTimerLiveActivityWidget: Widget {
                 .buttonStyle(.plain)
 
                 Button(intent: StopTimerIntent()) {
-                    Image(systemName: "xmark")
-                        .font(.title2.weight(.bold))
+                    Text(stopLabel(for: context.attributes.timerKind))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(.white)
-                        .frame(width: diameter, height: diameter)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 16)
+                        .frame(height: diameter)
                         .background(Color.gray.opacity(0.5))
-                        .clipShape(Circle())
+                        .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -133,6 +136,15 @@ struct BabyTimerLiveActivityWidget: Widget {
         case "night": return "moon.stars.fill"
         case "breast": return "heart.fill"
         default: return "timer"
+        }
+    }
+
+    /// The stop control ends a feed as readily as it ends a sleep, so the word has to
+    /// follow the timer rather than always saying "Wake up".
+    private func stopLabel(for timerKind: String) -> String {
+        switch timerKind {
+        case "nap", "night": return "Wake up"
+        default: return "Done"
         }
     }
 

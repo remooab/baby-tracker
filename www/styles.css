@@ -2732,3 +2732,75 @@ select {
     margin: 0 auto 18px;
     accent-color: var(--accent-primary);
 }
+
+/* ===== Awake since ===== */
+.awake-section {
+    margin-bottom: 26px;
+}
+
+.awake-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 18px;
+    border-radius: 24px;
+    border: 1px solid var(--card-border);
+    background: linear-gradient(135deg, rgba(232, 180, 184, 0.22), var(--bg-card));
+    box-shadow: var(--shadow-md);
+}
+
+.awake-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(232, 180, 184, 0.34);
+    color: var(--accent-feeding);
+}
+
+.awake-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.awake-label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.awake-time {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.awake-since {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.awake-card.is-overdue {
+    background: linear-gradient(135deg, rgba(224, 122, 122, 0.24), var(--bg-card));
+    border-color: rgba(224, 122, 122, 0.42);
+}
+
+.awake-card.is-overdue .awake-icon {
+    background: rgba(224, 122, 122, 0.28);
+    color: var(--danger);
+}
+
+.awake-card.is-overdue .awake-label {
+    color: var(--danger);
+}

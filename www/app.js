@@ -1737,6 +1737,7 @@ function startHomeStatusTicker() {
         const homeScreen = document.getElementById('homeScreen');
         if (homeScreen?.classList.contains('active')) {
             updateQuickStats();
+            updateAwakeSection();
         }
     }, 30000);
 }
@@ -1745,12 +1746,47 @@ function updateDashboard() {
     // This is called automatically by listeners when data changes
     updateQuickStats();
     updateTodaySummary();
+    // After checkActiveTimers, which is what sets state.activeSleep -- otherwise the
+    // awake card reads a stale "still sleeping" and stays hidden for a beat.
     checkActiveTimers();
+    updateAwakeSection();
     evaluateThresholdAlerts();
 }
 
 function updateQuickStats() {
     return;
+}
+
+// How long since the last sleep ended. This is the number that decides whether the
+// next nap is due, so it sits above the daily totals rather than inside them.
+function updateAwakeSection() {
+    const section = document.getElementById('awakeSection');
+    if (!section) return;
+
+    const lastEnded = state.activeSleep
+        ? null
+        : state.sleeps.filter((s) => s.endTime).sort((a, b) => b.endTime - a.endTime)[0];
+
+    if (!lastEnded) {
+        section.classList.add('hidden');
+        return;
+    }
+
+    section.classList.remove('hidden');
+
+    const awakeMs = Math.max(0, Date.now() - lastEnded.endTime);
+    const awakeMinutes = Math.floor(awakeMs / 60000);
+    document.getElementById('awakeTime').textContent = formatMinutes(awakeMinutes);
+    document.getElementById('awakeSince').textContent = `since ${formatTime(lastEnded.endTime)}`;
+
+    // Past the awake threshold the card carries it, so the state is visible without
+    // waiting for the notification.
+    const threshold = state.settings.awakeAlertEnabled
+        ? state.settings.awakeAlertMinutes
+        : null;
+    const overdue = threshold !== null && awakeMinutes >= threshold;
+    document.querySelector('.awake-card').classList.toggle('is-overdue', overdue);
+    document.getElementById('awakeLabel').textContent = overdue ? 'Awake too long' : 'Awake for';
 }
 
 function updateTodaySummary() {
