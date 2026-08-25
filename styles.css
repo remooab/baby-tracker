@@ -2369,28 +2369,39 @@ select {
     color: var(--hero-text);
 }
 
+/* WebKit ignores `display: grid` on form controls, so the contents of this
+   <button> are laid out by absolute positioning rather than by the grid that
+   Chromium was happy to honour. */
 .baby-photo {
     position: relative;
     width: 96px;
     height: 96px;
+    padding: 0;
     border-radius: 50%;
     background: var(--hero-avatar-bg);
     border: 2px solid var(--hero-avatar-ring);
     box-shadow: var(--shadow-sm);
-    display: grid;
-    place-items: center;
     overflow: visible;
     flex-shrink: 0;
 }
 
-.baby-photo-img {
+.baby-photo-img,
+.baby-photo-initials {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     border-radius: 50%;
+}
+
+.baby-photo-img {
     object-fit: cover;
 }
 
 .baby-photo-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 2.1rem;
     font-weight: 800;
     color: var(--accent-primary-dark);
@@ -2607,9 +2618,77 @@ select {
     }
 }
 
+.baby-avatar {
+    position: relative;
+}
+
 .baby-avatar-img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
+}
+
+/* ===== Photo cropper ===== */
+.cropper {
+    position: relative;
+    width: min(72vw, 288px);
+    aspect-ratio: 1;
+    margin: 0 auto 4px;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    touch-action: none;
+    cursor: grab;
+    user-select: none;
+}
+
+.cropper:active {
+    cursor: grabbing;
+}
+
+.cropper-img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform-origin: center;
+    will-change: transform;
+    pointer-events: none;
+}
+
+/* Everything outside the circle is dimmed, so the visible area is literally
+   what gets saved. */
+.cropper-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    /* `closest-side` makes the clear circle the one inscribed in the square, which
+       is exactly the region drawn to the canvas on confirm. */
+    background: radial-gradient(circle closest-side at center,
+        transparent 0 99%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+.cropper-mask::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+}
+
+.cropper-hint {
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.cropper-zoom {
+    display: block;
+    width: min(72vw, 288px);
+    margin: 0 auto 18px;
+    accent-color: var(--accent-primary);
 }

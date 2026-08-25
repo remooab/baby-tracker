@@ -2711,13 +2711,15 @@ function initSettings() {
     // --- Baby photo -------------------------------------------------------
     const photoInput = document.getElementById('babyPhotoInput');
     document.getElementById('babyPhotoBtn').addEventListener('click', () => photoInput.click());
+    initPhotoCropper();
 
     photoInput.addEventListener('change', async () => {
         const file = photoInput.files?.[0];
         photoInput.value = '';
         if (!file) return;
         try {
-            const photo = await downscaleImageToDataUrl(file, 320);
+            const photo = await openPhotoCropper(file);
+            if (!photo) return;
             await saveDoc(COLLECTIONS.baby, { id: 'main', ...(state.baby || {}), photo });
             showToast('Photo updated');
         } catch (error) {
@@ -2856,9 +2858,63 @@ function csvCell(value) {
     return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
-// Downscale in the browser so the photo fits comfortably inside the baby document
-// rather than needing a separate storage bucket.
-function downscaleImageToDataUrl(file, maxEdge) {
+// Let the user say which part of the photo is the face, rather than blindly
+// centre-cropping a wide camera-roll shot. The circle in the modal is the region
+// this writes out, so what they position is what they get.
+const cropper = {
+    image: null,
+    viewport: 0,
+    baseScale: 1,
+    scale: 1,
+    x: 0,
+    y: 0,
+    resolve: null
+};
+
+// Measure on demand rather than once on open: a single requestAnimationFrame can
+// fire before the modal has laid out, and a zero-width viewport silently produces
+// a zero-size source rect and a blank crop.
+function measureCropper() {
+    if (!cropper.image) return false;
+    const el = document.getElementById('cropper');
+    const size = el.clientWidth || el.getBoundingClientRect().width;
+    if (!size) return false;
+
+    cropper.viewport = size;
+    cropper.baseScale = Math.max(
+        size / cropper.image.naturalWidth,
+        size / cropper.image.naturalHeight
+    );
+    return true;
+}
+
+function primeCropper(attempts = 12) {
+    if (measureCropper()) {
+        renderCropper();
+        return;
+    }
+    if (attempts > 0) requestAnimationFrame(() => primeCropper(attempts - 1));
+}
+
+function renderCropper() {
+    measureCropper();
+    const img = document.getElementById('cropperImg');
+    const scale = cropper.baseScale * cropper.scale;
+    img.style.width = `${cropper.image.naturalWidth * scale}px`;
+    img.style.height = `${cropper.image.naturalHeight * scale}px`;
+    img.style.transform = `translate(calc(-50% + ${cropper.x}px), calc(-50% + ${cropper.y}px))`;
+}
+
+// Keep the circle covered: never let the pan expose an empty edge.
+function clampCropper() {
+    const scale = cropper.baseScale * cropper.scale;
+    const limitX = Math.max(0, (cropper.image.naturalWidth * scale - cropper.viewport) / 2);
+    const limitY = Math.max(0, (cropper.image.naturalHeight * scale - cropper.viewport) / 2);
+    cropper.x = Math.min(limitX, Math.max(-limitX, cropper.x));
+    cropper.y = Math.min(limitY, Math.max(-limitY, cropper.y));
+}
+
+function openPhotoCropper(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(new Error('read-failed'));
@@ -2866,18 +2922,87 @@ function downscaleImageToDataUrl(file, maxEdge) {
             const image = new Image();
             image.onerror = () => reject(new Error('decode-failed'));
             image.onload = () => {
-                const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
-                const canvas = document.createElement('canvas');
-                canvas.width = Math.round(image.width * scale);
-                canvas.height = Math.round(image.height * scale);
-                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.82));
+                cropper.image = image;
+                cropper.scale = 1;
+                cropper.x = 0;
+                cropper.y = 0;
+                cropper.resolve = resolve;
+
+                const el = document.getElementById('cropperImg');
+                el.src = image.src;
+                openModal('photoCropModal');
+
+                document.getElementById('cropperZoom').value = '1';
+                primeCropper();
             };
             image.src = reader.result;
         };
         reader.readAsDataURL(file);
     });
 }
+
+function commitCrop(size = 320) {
+    measureCropper();
+    const scale = cropper.baseScale * cropper.scale;
+    const sourceSize = cropper.viewport / scale;
+    const sx = cropper.image.naturalWidth / 2 - cropper.x / scale - sourceSize / 2;
+    const sy = cropper.image.naturalHeight / 2 - cropper.y / scale - sourceSize / 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    canvas.getContext('2d').drawImage(
+        cropper.image, sx, sy, sourceSize, sourceSize, 0, 0, size, size
+    );
+    return canvas.toDataURL('image/jpeg', 0.82);
+}
+
+function initPhotoCropper() {
+    const surface = document.getElementById('cropper');
+    let dragging = false;
+    let originX = 0;
+    let originY = 0;
+
+    surface.addEventListener('pointerdown', (event) => {
+        dragging = true;
+        originX = event.clientX - cropper.x;
+        originY = event.clientY - cropper.y;
+        surface.setPointerCapture(event.pointerId);
+    });
+
+    surface.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        cropper.x = event.clientX - originX;
+        cropper.y = event.clientY - originY;
+        clampCropper();
+        renderCropper();
+    });
+
+    const stop = () => { dragging = false; };
+    surface.addEventListener('pointerup', stop);
+    surface.addEventListener('pointercancel', stop);
+
+    document.getElementById('cropperZoom').addEventListener('input', (event) => {
+        cropper.scale = Number(event.target.value);
+        clampCropper();
+        renderCropper();
+    });
+
+    document.getElementById('cropperConfirm').addEventListener('click', () => {
+        const resolve = cropper.resolve;
+        cropper.resolve = null;
+        closeModal('photoCropModal');
+        if (resolve) resolve(commitCrop());
+    });
+
+    // Backing out leaves the existing photo alone.
+    document.querySelector('#photoCropModal .modal-close').addEventListener('click', () => {
+        const resolve = cropper.resolve;
+        cropper.resolve = null;
+        if (resolve) resolve(null);
+    });
+}
+
 
 // WKWebView ignores <a download>, so the native app has to hand the file to the
 // iOS share sheet instead. On the web the anchor is still the right answer.
@@ -3132,4 +3257,5 @@ async function init() {
 
 // Start the app
 document.addEventListener('DOMContentLoaded', init);
+
 

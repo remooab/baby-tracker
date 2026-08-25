@@ -688,6 +688,27 @@
     </div>
 
     <!-- Vitamin Modal -->
+    <!-- Photo cropper: the circle shows exactly what will be kept, so nobody has to
+         guess how a wide camera-roll shot will be framed. -->
+    <div class="modal" id="photoCropModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Position photo</h2>
+                <button class="modal-close" data-modal="photoCropModal" aria-label="Close"><svg class="ph-icon icon-18" viewBox="0 0 256 256" aria-hidden="true"><use href="phosphor-icons.svg#ph-x"></use></svg></button>
+            </div>
+            <div class="modal-body">
+                <div class="cropper" id="cropper">
+                    <img class="cropper-img" id="cropperImg" alt="" draggable="false">
+                    <div class="cropper-mask" aria-hidden="true"></div>
+                </div>
+                <p class="cropper-hint">Drag to move &middot; slide to zoom</p>
+                <input type="range" class="cropper-zoom" id="cropperZoom" min="1" max="3" step="0.01" value="1"
+                    aria-label="Zoom">
+                <button class="save-btn" id="cropperConfirm">Use photo</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="vitaminModal">
         <div class="modal-content">
             <div class="modal-header">
