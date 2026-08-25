@@ -229,7 +229,8 @@ const nativeCapabilities = {
     isNativeIOS: false,
     supportsLiveActivities: false,
     supportsNativeNotifications: false,
-    supportsCsvShare: false
+    supportsCsvShare: false,
+    supportsScheduledAlerts: false
 };
 
 const nativeNotificationState = {
@@ -249,6 +250,7 @@ async function loadNativeCapabilities() {
         nativeCapabilities.supportsLiveActivities = !!result?.supportsLiveActivities;
         nativeCapabilities.supportsNativeNotifications = result?.supportsNativeNotifications !== false;
         nativeCapabilities.supportsCsvShare = !!result?.supportsCsvShare;
+        nativeCapabilities.supportsScheduledAlerts = !!result?.supportsScheduledAlerts;
     } catch (error) {
         console.warn('Native capabilities unavailable:', error);
     }
@@ -377,6 +379,7 @@ async function reconcileFromLiveActivity() {
             lastLiveActivitySyncKey = '';
             const total = updated.endTime - updated.startTime - (updated.totalPausedMs || 0);
             showToast(`${active.label} saved: ${formatDuration(total)}`);
+            await syncScheduledAlerts();
             return;
         }
 
@@ -385,6 +388,7 @@ async function reconcileFromLiveActivity() {
         updated.pauseStartTime = snap.pausedAtMs != null ? Math.round(snap.pausedAtMs) : null;
         await saveDoc(active.collection, updated);
         lastLiveActivitySyncKey = '';
+        await syncScheduledAlerts();
     } catch (error) {
         console.warn('Live Activity state reconcile failed:', error);
     }
@@ -422,6 +426,7 @@ async function saveUserSettings(partialSettings) {
         })
     };
     await saveDoc(COLLECTIONS.settings, settings);
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
 }
 
 function getNotificationPermission() {
@@ -512,6 +517,10 @@ async function requestNotificationPermission() {
     await saveUserSettings({ notificationsEnabled: true });
     showToast('Notifications preference saved');
     return true;
+}
+
+function alertsAreScheduledNatively() {
+    return isNativeCapacitorApp() && nativeCapabilities.supportsScheduledAlerts;
 }
 
 async function showSystemNotification(title, body, tag, data = {}) {
@@ -650,6 +659,7 @@ async function stopActiveBreastfeeding() {
     const totalDuration = feeding.endTime - feeding.startTime - (feeding.totalPausedMs || 0);
     await saveDoc(COLLECTIONS.feedings, feeding);
     syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
     showToast(`Feeding saved: ${formatDuration(totalDuration)}`);
 }
 
@@ -670,6 +680,7 @@ async function togglePauseActiveBreastfeeding() {
 
     await saveDoc(COLLECTIONS.feedings, updated);
     syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
 }
 
 async function stopActiveSleep() {
@@ -687,6 +698,7 @@ async function stopActiveSleep() {
     const totalDuration = sleep.endTime - sleep.startTime - (sleep.totalPausedMs || 0);
     await saveDoc(COLLECTIONS.sleeps, sleep);
     syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
     showToast(`Sleep saved: ${formatDuration(totalDuration)}`);
 }
 
@@ -707,6 +719,7 @@ async function togglePauseActiveSleep() {
 
     await saveDoc(COLLECTIONS.sleeps, updated);
     syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
 }
 
 function initServiceWorkerMessages() {
@@ -802,12 +815,15 @@ function evaluateAwakeAlert() {
 
     if (!notificationRuntime.awakeNotified && awakeMs >= thresholdMs) {
         notificationRuntime.awakeNotified = true;
-        showSystemNotification(
-            'Baby Awake Alert',
-            `Baby has been awake for ${state.settings.awakeAlertMinutes} minutes.`,
-            `awake-${sessionKey}`,
-            { type: 'awake-alert' }
-        ).catch((error) => console.error('Awake notification failed:', error));
+        // iOS is already holding a scheduled copy of this one.
+        if (!alertsAreScheduledNatively()) {
+            showSystemNotification(
+                'Baby Awake Alert',
+                `Baby has been awake for ${state.settings.awakeAlertMinutes} minutes.`,
+                `awake-${sessionKey}`,
+                { type: 'awake-alert' }
+            ).catch((error) => console.error('Awake notification failed:', error));
+        }
         showToast('Awake alert reached');
     }
 }
@@ -832,19 +848,102 @@ function evaluateSleepAlert() {
     notificationRuntime.sleepNotifiedById[sleepId] = true;
 
     const sleepLabel = isNap ? 'Nap' : 'Night sleep';
-    showSystemNotification(
-        `${sleepLabel} Alert`,
-        `${sleepLabel} reached ${alertMinutes} minutes.`,
-        `sleep-${sleepId}`,
-        { type: 'sleep-alert', sleepId }
-    ).catch((error) => console.error('Sleep notification failed:', error));
+    if (!alertsAreScheduledNatively()) {
+        showSystemNotification(
+            `${sleepLabel} Alert`,
+            `${sleepLabel} reached ${alertMinutes} minutes.`,
+            `sleep-${sleepId}`,
+            { type: 'sleep-alert', sleepId }
+        ).catch((error) => console.error('Sleep notification failed:', error));
+    }
     showToast(`${sleepLabel} alert reached`);
+}
+
+// Alerts are handed to iOS ahead of time rather than waited for by a timer in the
+// page. The 5s interval below only ticks while the app is alive, so once the phone
+// locked, a nap alert arrived late or never. iOS holds a scheduled notification and
+// delivers it regardless of what the app is doing.
+//
+// What we last asked iOS to hold, so rescheduling only touches what actually moved.
+const scheduledAlerts = new Map();
+
+function describeAlertTargets() {
+    const targets = new Map();
+    const settings = state.settings;
+    if (!settings.notificationsEnabled) return targets;
+
+    const sleep = state.activeSleep;
+
+    // A paused sleep has no knowable fire time, so nothing is scheduled until it
+    // resumes and totalPausedMs is final.
+    if (sleep && !sleep.isPaused) {
+        const isNap = sleep.type === 'nap';
+        const enabled = isNap ? settings.napAlertEnabled : settings.nightSleepAlertEnabled;
+        const minutes = isNap ? settings.napAlertMinutes : settings.nightSleepAlertMinutes;
+        if (enabled) {
+            const label = isNap ? 'Nap' : 'Night sleep';
+            targets.set(`sleep-${sleep.id}`, {
+                fireAtMs: sleep.startTime + (sleep.totalPausedMs || 0) + minutes * 60000,
+                title: `${label} alert`,
+                body: `${label} has reached ${formatMinutes(minutes)}.`,
+                data: { type: 'sleep-alert', sleepId: sleep.id }
+            });
+        }
+    }
+
+    if (!sleep && settings.awakeAlertEnabled) {
+        const lastEnded = state.sleeps
+            .filter((s) => s.endTime)
+            .sort((a, b) => b.endTime - a.endTime)[0];
+        if (lastEnded) {
+            targets.set(`awake-${lastEnded.id}`, {
+                fireAtMs: lastEnded.endTime + settings.awakeAlertMinutes * 60000,
+                title: 'Awake alert',
+                body: `${getBabyDisplayName()} has been awake for ${formatMinutes(settings.awakeAlertMinutes)}.`,
+                data: { type: 'awake-alert' }
+            });
+        }
+    }
+
+    return targets;
+}
+
+async function syncScheduledAlerts() {
+    if (!isNativeCapacitorApp()) return;
+    if (!nativeCapabilities.supportsScheduledAlerts) return;
+    const plugin = getNativeTimerLiveActivityPlugin();
+    if (!plugin?.scheduleLocalNotification) return;
+
+    const targets = describeAlertTargets();
+
+    // Drop anything no longer wanted, or whose fire time moved (a pause, a changed
+    // threshold, a different sleep).
+    for (const [tag, fireAtMs] of [...scheduledAlerts]) {
+        if (targets.get(tag)?.fireAtMs === fireAtMs) continue;
+        try {
+            await plugin.clearLocalNotification({ tag });
+        } catch (error) {
+            console.warn('Could not cancel alert:', error);
+        }
+        scheduledAlerts.delete(tag);
+    }
+
+    for (const [tag, alert] of targets) {
+        if (scheduledAlerts.has(tag)) continue;
+        try {
+            await plugin.scheduleLocalNotification({ tag, ...alert });
+            scheduledAlerts.set(tag, alert.fireAtMs);
+        } catch (error) {
+            console.warn('Could not schedule alert:', error);
+        }
+    }
 }
 
 function evaluateThresholdAlerts() {
     if (!state.user) return;
     evaluateAwakeAlert();
     evaluateSleepAlert();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
     reconcileFromLiveActivity();
     handlePendingNotificationAction().catch((error) => {
         console.error('Pending action handler failed:', error);
@@ -1736,6 +1835,7 @@ function checkActiveTimers() {
 
     // Sync Live Activity whenever active timer state is re-evaluated
     syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
 }
 
 // ===== Active Timer Logic =====
@@ -1854,6 +1954,7 @@ function initBreastfeeding() {
             .then(() => {
                 showToast('Breastfeeding started');
                 syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
             });
 
         closeModal('breastfeedingModal');
@@ -2088,6 +2189,7 @@ function initSleep() {
 
         showToast('Sleep started');
         syncNativeLiveActivity();
+    syncScheduledAlerts().catch((error) => console.warn('Alert scheduling failed:', error));
     });
 
     document.getElementById('wakeUpBtn').addEventListener('click', async () => {

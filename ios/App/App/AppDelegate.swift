@@ -152,6 +152,7 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getNotificationPermission", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestNotificationPermission", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sendLocalNotification", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "scheduleLocalNotification", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clearLocalNotification", returnType: CAPPluginReturnPromise)
     ]
 
@@ -241,7 +242,8 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             "isNativeIOS": true,
             "supportsLiveActivities": supportsLiveActivities,
             "supportsNativeNotifications": true,
-            "supportsCsvShare": true
+            "supportsCsvShare": true,
+            "supportsScheduledAlerts": true
         ])
     }
 
@@ -317,6 +319,43 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             call.resolve(["ok": true])
+        }
+    }
+
+    /// Hand the alert to iOS ahead of time so it fires whether or not the app is
+    /// running. The web layer's 5s interval only ticks while the app is alive, so a
+    /// nap alert would arrive late or not at all once the app was backgrounded.
+    @objc func scheduleLocalNotification(_ call: CAPPluginCall) {
+        let title = call.getString("title") ?? "Baby Tracker"
+        let body = call.getString("body") ?? ""
+        let tag = call.getString("tag") ?? UUID().uuidString
+        let userInfo = call.getObject("data") ?? [:]
+
+        guard let fireAtMs = call.getDouble("fireAtMs") else {
+            call.reject("missing-fireAtMs")
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.userInfo = userInfo
+
+        // A moment that has already passed still deserves delivery, just immediately.
+        let secondsAway = (fireAtMs - Date().timeIntervalSince1970 * 1000) / 1000
+        let delay = max(1, secondsAway)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: delay, repeats: false)
+
+        let center = UNUserNotificationCenter.current()
+        // Replacing by identifier keeps rescheduling idempotent.
+        center.removePendingNotificationRequests(withIdentifiers: [tag])
+        center.add(UNNotificationRequest(identifier: tag, content: content, trigger: trigger)) { error in
+            if let error = error {
+                call.reject("schedule-local-notification-failed", nil, error)
+                return
+            }
+            call.resolve(["ok": true, "delaySeconds": delay])
         }
     }
 
