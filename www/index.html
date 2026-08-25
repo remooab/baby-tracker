@@ -117,6 +117,7 @@
             <header class="app-header">
                 <div class="home-hero">
                     <div class="baby-avatar" id="babyAvatar" aria-hidden="true">
+                        <img class="baby-avatar-img hidden" id="babyAvatarImg" alt="">
                         <span class="baby-avatar-initials" id="babyAvatarInitials">B</span>
                     </div>
                     <div class="baby-info" id="babyInfo">
@@ -327,122 +328,180 @@
 
         <!-- Settings Screen -->
         <div class="screen" id="settingsScreen">
-            <header class="screen-header">
-                <h1>Settings</h1>
-            </header>
             <main class="settings-content settings-shell">
-                <section class="settings-section">
-                    <h2 class="settings-title">Baby Information</h2>
-                    <div class="form-group">
-                        <label for="babyName">Baby's Name</label>
-                        <input type="text" id="babyName" placeholder="Enter baby's name">
+
+                <!-- Baby profile: the screen opens with the baby, not the word "Settings" -->
+                <section class="baby-card">
+                    <button type="button" class="baby-photo" id="babyPhotoBtn" aria-label="Change photo">
+                        <img class="baby-photo-img hidden" id="babyPhotoImg" alt="">
+                        <span class="baby-photo-initials" id="babyPhotoInitials">B</span>
+                        <span class="baby-photo-badge" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 8.5h3l1.4-2h7.2L17 8.5h3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"/>
+                                <circle cx="12" cy="13" r="3.2"/>
+                            </svg>
+                        </span>
+                    </button>
+                    <input type="file" id="babyPhotoInput" accept="image/*" hidden>
+
+                    <input type="text" id="babyName" class="baby-name-input" placeholder="Add a name"
+                        autocomplete="off" spellcheck="false" maxlength="40">
+                    <p class="baby-age-line" id="babyAgeLine">Add a birth date to track age</p>
+
+                    <div class="baby-card-row">
+                        <label class="ios-label" for="babyBirthDate">Birth date</label>
+                        <input type="date" id="babyBirthDate" class="ios-inline-input">
                     </div>
-                    <div class="form-group">
-                        <label for="babyBirthDate">Birth Date</label>
-                        <input type="date" id="babyBirthDate">
-                    </div>
-                    <button class="save-btn" id="saveBabyInfo">Save Baby Info</button>
+                    <button type="button" class="baby-photo-remove hidden" id="babyPhotoRemove">Remove photo</button>
                 </section>
 
                 <section class="settings-section">
-                    <h2 class="settings-title">Preferences</h2>
+                    <h2 class="settings-title" data-accent="sleep">Alerts</h2>
                     <div class="ios-list-group">
                         <div class="ios-row">
-                            <span class="ios-label">Volume Unit</span>
-                            <select id="volumeUnit" class="ios-inline-select">
-                                <option value="ml">ml</option>
-                                <option value="oz">oz</option>
-                            </select>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="settings-section">
-                    <h2 class="settings-title">Notifications</h2>
-                    <div class="ios-list-group">
-                        <div class="ios-row">
-                            <span class="ios-label">Notifications</span>
+                            <div class="ios-row-text">
+                                <span class="ios-label">Allow notifications</span>
+                                <span class="ios-hint" id="notificationHint">Off</span>
+                            </div>
                             <label class="ios-switch">
                                 <input type="checkbox" id="notificationsEnabled">
                                 <span class="ios-slider"></span>
                             </label>
                         </div>
-                        <div class="ios-row ios-row-stack">
-                            <span class="ios-label">System Permission</span>
-                            <span class="ios-value" id="notificationPermissionStatus">Not requested</span>
-                        </div>
-                        <div class="ios-row ios-row-actions">
-                            <button class="secondary-btn" id="enableNotifications">Enable Notifications</button>
-                            <button class="secondary-btn" id="testNotificationBtn">Send Test Alert</button>
+                        <div class="ios-row ios-row-actions" id="notificationPermissionRow">
+                            <button class="secondary-btn" id="enableNotifications">Enable notifications</button>
                         </div>
                     </div>
 
-                    <div class="ios-list-group">
+                    <div class="ios-list-group" data-depends-on="notificationsEnabled">
                         <div class="ios-row">
-                            <span class="ios-label">Live Activity (fallback)</span>
-                            <label class="ios-switch">
-                                <input type="checkbox" id="liveActivityEnabled">
-                                <span class="ios-slider"></span>
-                            </label>
-                        </div>
-                        <div class="ios-row">
-                            <span class="ios-label">Awake Alert</span>
+                            <div class="ios-row-text">
+                                <span class="ios-label">Awake too long</span>
+                                <span class="ios-hint">Nudge me when awake time runs past a limit</span>
+                            </div>
                             <label class="ios-switch">
                                 <input type="checkbox" id="awakeAlertEnabled">
                                 <span class="ios-slider"></span>
                             </label>
                         </div>
-                        <div class="ios-row">
-                            <span class="ios-label">Awake After (min)</span>
-                            <input type="number" class="ios-number" id="awakeAlertMinutes" min="1" max="720" step="1"
-                                value="60">
+                        <div class="ios-row ios-row-sub" data-depends-on="awakeAlertEnabled">
+                            <span class="ios-label">Alert after</span>
+                            <div class="stepper" data-target="awakeAlertMinutes" data-step="15" data-min="5" data-max="720">
+                                <button type="button" class="stepper-btn" data-dir="-1" aria-label="Less time">−</button>
+                                <span class="stepper-value" data-value-for="awakeAlertMinutes">1h</span>
+                                <button type="button" class="stepper-btn" data-dir="1" aria-label="More time">+</button>
+                            </div>
+                            <input type="hidden" id="awakeAlertMinutes" value="60">
                         </div>
+
                         <div class="ios-row">
-                            <span class="ios-label">Nap Alert</span>
+                            <div class="ios-row-text">
+                                <span class="ios-label">Long nap</span>
+                                <span class="ios-hint">Nudge me when a nap runs past a limit</span>
+                            </div>
                             <label class="ios-switch">
                                 <input type="checkbox" id="napAlertEnabled">
                                 <span class="ios-slider"></span>
                             </label>
                         </div>
-                        <div class="ios-row">
-                            <span class="ios-label">Nap After (min)</span>
-                            <input type="number" class="ios-number" id="napAlertMinutes" min="1" max="720" step="1"
-                                value="140">
+                        <div class="ios-row ios-row-sub" data-depends-on="napAlertEnabled">
+                            <span class="ios-label">Alert after</span>
+                            <div class="stepper" data-target="napAlertMinutes" data-step="15" data-min="5" data-max="720">
+                                <button type="button" class="stepper-btn" data-dir="-1" aria-label="Less time">−</button>
+                                <span class="stepper-value" data-value-for="napAlertMinutes">2h 20m</span>
+                                <button type="button" class="stepper-btn" data-dir="1" aria-label="More time">+</button>
+                            </div>
+                            <input type="hidden" id="napAlertMinutes" value="140">
                         </div>
+
                         <div class="ios-row">
-                            <span class="ios-label">Night Sleep Alert</span>
+                            <div class="ios-row-text">
+                                <span class="ios-label">Long night sleep</span>
+                                <span class="ios-hint">Nudge me when night sleep runs past a limit</span>
+                            </div>
                             <label class="ios-switch">
                                 <input type="checkbox" id="nightSleepAlertEnabled">
                                 <span class="ios-slider"></span>
                             </label>
                         </div>
-                        <div class="ios-row">
-                            <span class="ios-label">Night Sleep After (min)</span>
-                            <input type="number" class="ios-number" id="nightSleepAlertMinutes" min="1" max="960"
-                                step="1" value="240">
+                        <div class="ios-row ios-row-sub" data-depends-on="nightSleepAlertEnabled">
+                            <span class="ios-label">Alert after</span>
+                            <div class="stepper" data-target="nightSleepAlertMinutes" data-step="30" data-min="30" data-max="960">
+                                <button type="button" class="stepper-btn" data-dir="-1" aria-label="Less time">−</button>
+                                <span class="stepper-value" data-value-for="nightSleepAlertMinutes">4h</span>
+                                <button type="button" class="stepper-btn" data-dir="1" aria-label="More time">+</button>
+                            </div>
+                            <input type="hidden" id="nightSleepAlertMinutes" value="240">
                         </div>
                     </div>
-
-                    <button class="save-btn" id="saveNotificationSettings">Save Notifications</button>
                 </section>
 
                 <section class="settings-section">
-                    <h2 class="settings-title">Account</h2>
-                    <p class="user-email-display" id="userEmailDisplay"></p>
-                    <button class="secondary-btn hidden" id="openNativeSettingsBtn">Open Native iOS Settings</button>
-                    <button class="secondary-btn" id="logoutBtn">Log Out</button>
+                    <h2 class="settings-title" data-accent="feeding">Lock screen</h2>
+                    <div class="ios-list-group">
+                        <div class="ios-row">
+                            <div class="ios-row-text">
+                                <span class="ios-label">Show running timers</span>
+                                <span class="ios-hint">Pause or stop a timer without unlocking</span>
+                            </div>
+                            <label class="ios-switch">
+                                <input type="checkbox" id="liveActivityEnabled">
+                                <span class="ios-slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </section>
 
                 <section class="settings-section">
-                    <h2 class="settings-title">Data</h2>
-                    <button class="secondary-btn" id="exportData">Export Data (CSV)</button>
-                    <button class="danger-btn" id="clearData">Clear All Data</button>
+                    <h2 class="settings-title" data-accent="bottle">Preferences</h2>
+                    <div class="ios-list-group">
+                        <div class="ios-row">
+                            <span class="ios-label">Volume unit</span>
+                            <div class="segmented" id="volumeUnitSeg" role="group" aria-label="Volume unit">
+                                <button type="button" class="segmented-option" data-value="ml">ml</button>
+                                <button type="button" class="segmented-option" data-value="oz">oz</button>
+                            </div>
+                        </div>
+                        <div class="ios-row">
+                            <span class="ios-label">Appearance</span>
+                            <div class="segmented" id="themeSeg" role="group" aria-label="Appearance">
+                                <button type="button" class="segmented-option" data-value="system">Auto</button>
+                                <button type="button" class="segmented-option" data-value="light">Light</button>
+                                <button type="button" class="segmented-option" data-value="dark">Dark</button>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 <section class="settings-section">
-                    <h2 class="settings-title">About</h2>
-                    <p class="about-text">My Baby Progress Tracker v1.0</p>
-                    <p class="about-text">Made with care for tired parents</p>
+                    <h2 class="settings-title" data-accent="food">Your data</h2>
+                    <div class="ios-list-group">
+                        <div class="ios-row ios-row-stack">
+                            <span class="ios-label">Everything you've logged</span>
+                            <span class="ios-hint" id="dataSummary">Nothing logged yet</span>
+                        </div>
+                        <div class="ios-row ios-row-actions">
+                            <button class="secondary-btn" id="exportData">Export as CSV</button>
+                        </div>
+                        <div class="ios-row ios-row-actions">
+                            <button class="danger-btn" id="clearData">Delete all data</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="settings-section">
+                    <h2 class="settings-title" data-accent="primary">Account</h2>
+                    <div class="ios-list-group">
+                        <div class="ios-row ios-row-stack">
+                            <span class="ios-label">Signed in as</span>
+                            <span class="ios-hint" id="userEmailDisplay"></span>
+                        </div>
+                        <div class="ios-row ios-row-actions">
+                            <button class="secondary-btn" id="logoutBtn">Log out</button>
+                        </div>
+                    </div>
+                    <p class="about-text" id="aboutVersion">Baby Tracker</p>
                 </section>
             </main>
         </div>

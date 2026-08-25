@@ -104,6 +104,21 @@ const COLLECTIONS = {
     settings: 'settings'
 };
 
+// Mirror the theme locally so a cold start paints the right palette immediately
+// instead of flashing the system default until settings arrive from Firestore.
+const THEME_STORAGE_KEY = 'babyTracker.theme';
+
+try {
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (storedTheme === 'light' || storedTheme === 'dark') {
+        document.documentElement.setAttribute('data-theme', storedTheme);
+    }
+} catch (error) {
+    // Private mode or blocked storage: fall back to the system palette.
+}
+
+const APP_VERSION = 'v1.1.0';
+
 const DEFAULT_SETTINGS = {
     volumeUnit: 'ml',
     notificationsEnabled: false,
@@ -113,7 +128,8 @@ const DEFAULT_SETTINGS = {
     napAlertEnabled: true,
     napAlertMinutes: 140,
     nightSleepAlertEnabled: false,
-    nightSleepAlertMinutes: 240
+    nightSleepAlertMinutes: 240,
+    theme: 'system'
 };
 
 const SOLID_FOOD_MEAL_TYPES = {
@@ -213,7 +229,7 @@ const nativeCapabilities = {
     isNativeIOS: false,
     supportsLiveActivities: false,
     supportsNativeNotifications: false,
-    nativeSettingsAvailable: false
+    supportsCsvShare: false
 };
 
 const nativeNotificationState = {
@@ -232,7 +248,7 @@ async function loadNativeCapabilities() {
         nativeCapabilities.isNativeIOS = !!result?.isNativeIOS;
         nativeCapabilities.supportsLiveActivities = !!result?.supportsLiveActivities;
         nativeCapabilities.supportsNativeNotifications = result?.supportsNativeNotifications !== false;
-        nativeCapabilities.nativeSettingsAvailable = !!result?.nativeSettingsAvailable;
+        nativeCapabilities.supportsCsvShare = !!result?.supportsCsvShare;
     } catch (error) {
         console.warn('Native capabilities unavailable:', error);
     }
@@ -392,7 +408,8 @@ function normalizeSettings(settings = {}) {
         napAlertEnabled: settings.napAlertEnabled !== false,
         napAlertMinutes: clampMinutes(settings.napAlertMinutes, DEFAULT_SETTINGS.napAlertMinutes),
         nightSleepAlertEnabled: !!settings.nightSleepAlertEnabled,
-        nightSleepAlertMinutes: clampMinutes(settings.nightSleepAlertMinutes, DEFAULT_SETTINGS.nightSleepAlertMinutes)
+        nightSleepAlertMinutes: clampMinutes(settings.nightSleepAlertMinutes, DEFAULT_SETTINGS.nightSleepAlertMinutes),
+        theme: ['system', 'light', 'dark'].includes(settings.theme) ? settings.theme : 'system'
     };
 }
 
@@ -1419,67 +1436,172 @@ function initAmountButtons() {
 // ===== Dashboard & Updates =====
 
 function updateBabyUI() {
-    const babyInfo = document.getElementById('babyInfo');
-    if (!babyInfo) return;
-
     const babyName = getBabyDisplayName();
-    const babyAge = state.baby?.birthDate
+    const hasBirthDate = !!state.baby?.birthDate;
+    const babyAge = hasBirthDate
         ? calculateBabyAge(state.baby.birthDate)
         : 'Set up your baby\'s info in settings';
 
-    babyInfo.querySelector('.baby-name').textContent = `Hello, ${babyName}`;
-    babyInfo.querySelector('.baby-age').textContent = babyAge;
-
-    const avatarInitials = document.getElementById('babyAvatarInitials');
-    if (avatarInitials) {
-        avatarInitials.textContent = getBabyInitials(babyName);
+    const babyInfo = document.getElementById('babyInfo');
+    if (babyInfo) {
+        babyInfo.querySelector('.baby-name').textContent = `Hello, ${babyName}`;
+        babyInfo.querySelector('.baby-age').textContent = babyAge;
     }
+
+    const photo = state.baby?.photo || '';
+
+    // Home hero avatar: the photo when there is one, initials otherwise.
+    const avatarInitials = document.getElementById('babyAvatarInitials');
+    const avatarImg = document.getElementById('babyAvatarImg');
+    if (avatarInitials) avatarInitials.textContent = getBabyInitials(babyName);
+    if (avatarImg) {
+        avatarImg.src = photo;
+        avatarImg.classList.toggle('hidden', !photo);
+    }
+    if (avatarInitials) avatarInitials.classList.toggle('hidden', !!photo);
+
+    // Settings fields. These are the only controls that never used to be restored
+    // from state, so a saved name looked like it had been thrown away.
+    const nameInput = document.getElementById('babyName');
+    const birthInput = document.getElementById('babyBirthDate');
+    if (nameInput && document.activeElement !== nameInput) {
+        nameInput.value = state.baby?.name || '';
+    }
+    if (birthInput && document.activeElement !== birthInput) {
+        birthInput.value = state.baby?.birthDate || '';
+    }
+
+    const ageLine = document.getElementById('babyAgeLine');
+    if (ageLine) {
+        ageLine.textContent = hasBirthDate ? babyAge : 'Add a birth date to track age';
+    }
+
+    const settingsPhotoImg = document.getElementById('babyPhotoImg');
+    const settingsPhotoInitials = document.getElementById('babyPhotoInitials');
+    const removePhotoBtn = document.getElementById('babyPhotoRemove');
+    if (settingsPhotoImg) {
+        settingsPhotoImg.src = photo;
+        settingsPhotoImg.classList.toggle('hidden', !photo);
+    }
+    if (settingsPhotoInitials) {
+        settingsPhotoInitials.textContent = getBabyInitials(babyName);
+        settingsPhotoInitials.classList.toggle('hidden', !!photo);
+    }
+    if (removePhotoBtn) removePhotoBtn.classList.toggle('hidden', !photo);
+}
+
+// Minutes as something readable at 3am: "45m", "1h", "2h 20m".
+function formatMinutes(total) {
+    const mins = Math.max(0, Math.round(Number(total) || 0));
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (!h) return `${m}m`;
+    return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function applyTheme(preference) {
+    const root = document.documentElement;
+    if (preference === 'light' || preference === 'dark') {
+        root.setAttribute('data-theme', preference);
+    } else {
+        root.removeAttribute('data-theme');
+    }
+    try {
+        localStorage.setItem(THEME_STORAGE_KEY, preference);
+    } catch (error) {
+        // Nothing to do; the setting still lives in Firestore.
+    }
+}
+
+function setSegmented(groupId, value) {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.querySelectorAll('.segmented-option').forEach((option) => {
+        option.setAttribute('aria-pressed', String(option.dataset.value === value));
+    });
+}
+
+// A control whose parent switch is off reads as inactive instead of inviting
+// edits that would not take effect.
+function syncDependentRows() {
+    document.querySelectorAll('[data-depends-on]').forEach((el) => {
+        const source = document.getElementById(el.dataset.dependsOn);
+        el.classList.toggle('is-inactive', !(source && source.checked));
+    });
+}
+
+function describeLoggedData() {
+    const counts = [
+        [state.feedings?.length || 0, 'feeding', 'feedings'],
+        [state.solids?.length || 0, 'solid', 'solids'],
+        [state.sleeps?.length || 0, 'sleep', 'sleeps']
+    ].filter(([n]) => n > 0)
+        .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+
+    if (!counts.length) return 'Nothing logged yet';
+
+    const earliest = [...(state.feedings || []), ...(state.solids || []), ...(state.sleeps || [])]
+        .reduce((min, entry) => (entry.startTime && entry.startTime < min ? entry.startTime : min), Date.now());
+
+    return `${counts.join(' \u00b7 ')} \u00b7 since ${new Date(earliest).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
 }
 
 function updateSettingsUI() {
     const settings = normalizeSettings(state.settings || {});
     state.settings = settings;
 
-    document.getElementById('volumeUnit').value = settings.volumeUnit;
+    applyTheme(settings.theme);
+    setSegmented('volumeUnitSeg', settings.volumeUnit);
+    setSegmented('themeSeg', settings.theme);
+
     document.getElementById('notificationsEnabled').checked = settings.notificationsEnabled;
     document.getElementById('liveActivityEnabled').checked = settings.liveActivityEnabled;
     document.getElementById('awakeAlertEnabled').checked = settings.awakeAlertEnabled;
-    document.getElementById('awakeAlertMinutes').value = settings.awakeAlertMinutes;
     document.getElementById('napAlertEnabled').checked = settings.napAlertEnabled;
-    document.getElementById('napAlertMinutes').value = settings.napAlertMinutes;
     document.getElementById('nightSleepAlertEnabled').checked = settings.nightSleepAlertEnabled;
-    document.getElementById('nightSleepAlertMinutes').value = settings.nightSleepAlertMinutes;
 
-    // Use native permission state when available, otherwise fall back to web API
+    [['awakeAlertMinutes', settings.awakeAlertMinutes],
+     ['napAlertMinutes', settings.napAlertMinutes],
+     ['nightSleepAlertMinutes', settings.nightSleepAlertMinutes]].forEach(([id, value]) => {
+        const input = document.getElementById(id);
+        if (input) input.value = value;
+        const label = document.querySelector(`[data-value-for="${id}"]`);
+        if (label) label.textContent = formatMinutes(value);
+    });
+
+    syncDependentRows();
+
+    const summary = document.getElementById('dataSummary');
+    if (summary) summary.textContent = describeLoggedData();
+
+    const version = document.getElementById('aboutVersion');
+    if (version) version.textContent = `Baby Tracker ${APP_VERSION}`;
+
     const permission = (isNativeCapacitorApp() && nativeNotificationState.loaded)
         ? nativeNotificationState.permission
         : getNotificationPermission();
     const enableBtn = document.getElementById('enableNotifications');
-    const permissionStatus = document.getElementById('notificationPermissionStatus');
-    const nativeSettingsButton = document.getElementById('openNativeSettingsBtn');
+    const permissionRow = document.getElementById('notificationPermissionRow');
+    const hint = document.getElementById('notificationHint');
 
-    if (nativeSettingsButton) {
-        nativeSettingsButton.classList.toggle('hidden', !nativeCapabilities.nativeSettingsAvailable);
-    }
-
-    enableBtn.disabled = false;
-    if (permission === 'unsupported' && !isNativeCapacitorApp()) {
-        enableBtn.textContent = 'Notifications not supported';
-        enableBtn.disabled = true;
-        permissionStatus.textContent = 'Unsupported on this device';
-        return;
-    }
-
+    // One row instead of a raw permission status plus a button: the button only
+    // appears while there is something for it to do.
     if (permission === 'granted') {
-        enableBtn.textContent = 'Permission Granted';
-        enableBtn.disabled = true;
-        permissionStatus.textContent = 'Granted';
+        hint.textContent = settings.notificationsEnabled ? 'On' : 'Off';
+        permissionRow.classList.add('hidden');
     } else if (permission === 'denied') {
-        enableBtn.textContent = 'Open Settings to Re-enable';
-        permissionStatus.textContent = 'Denied — open iOS Settings';
+        hint.textContent = 'Blocked in iOS Settings';
+        permissionRow.classList.remove('hidden');
+        enableBtn.textContent = 'Open iOS Settings';
+        enableBtn.disabled = false;
+    } else if (permission === 'unsupported' && !isNativeCapacitorApp()) {
+        hint.textContent = 'Not supported on this device';
+        permissionRow.classList.add('hidden');
     } else {
-        enableBtn.textContent = 'Enable Notifications';
-        permissionStatus.textContent = 'Not yet requested';
+        hint.textContent = 'Needs permission';
+        permissionRow.classList.remove('hidden');
+        enableBtn.textContent = 'Enable notifications';
+        enableBtn.disabled = false;
     }
 }
 
@@ -2569,25 +2691,90 @@ function initEditSleep() {
 }
 
 // ===== Settings =====
+// Every control here saves the moment it changes. The screen used to mix three
+// save models — instant for the volume unit, an explicit button for baby info and
+// another for notifications — so nothing you learned in one group transferred to
+// the next, and a saved value that vanished read as data loss.
 function initSettings() {
-    // Note: State is already loaded via listeners
-
-    // Save baby info
-    document.getElementById('saveBabyInfo').addEventListener('click', async () => {
-        const baby = {
+    const debouncedSaveBaby = debounce(async () => {
+        await saveDoc(COLLECTIONS.baby, {
             id: 'main',
-            name: document.getElementById('babyName').value,
+            ...(state.baby || {}),
+            name: document.getElementById('babyName').value.trim(),
             birthDate: document.getElementById('babyBirthDate').value
-        };
-        await saveDoc(COLLECTIONS.baby, baby);
-        showToast('Baby info saved');
-        // UI updates automatically via listener
+        });
+    }, 600);
+
+    document.getElementById('babyName').addEventListener('input', debouncedSaveBaby);
+    document.getElementById('babyBirthDate').addEventListener('change', debouncedSaveBaby);
+
+    // --- Baby photo -------------------------------------------------------
+    const photoInput = document.getElementById('babyPhotoInput');
+    document.getElementById('babyPhotoBtn').addEventListener('click', () => photoInput.click());
+
+    photoInput.addEventListener('change', async () => {
+        const file = photoInput.files?.[0];
+        photoInput.value = '';
+        if (!file) return;
+        try {
+            const photo = await downscaleImageToDataUrl(file, 320);
+            await saveDoc(COLLECTIONS.baby, { id: 'main', ...(state.baby || {}), photo });
+            showToast('Photo updated');
+        } catch (error) {
+            console.error('Photo failed:', error);
+            showToast('Could not read that image');
+        }
     });
 
-    // Volume unit change
-    document.getElementById('volumeUnit').addEventListener('change', async (e) => {
-        await saveUserSettings({ volumeUnit: e.target.value });
-        showToast('Settings saved');
+    document.getElementById('babyPhotoRemove').addEventListener('click', async () => {
+        await saveDoc(COLLECTIONS.baby, { id: 'main', ...(state.baby || {}), photo: '' });
+        showToast('Photo removed');
+    });
+
+    // --- Segmented controls ----------------------------------------------
+    document.getElementById('volumeUnitSeg').addEventListener('click', async (event) => {
+        const option = event.target.closest('.segmented-option');
+        if (!option) return;
+        setSegmented('volumeUnitSeg', option.dataset.value);
+        await saveUserSettings({ volumeUnit: option.dataset.value });
+    });
+
+    document.getElementById('themeSeg').addEventListener('click', async (event) => {
+        const option = event.target.closest('.segmented-option');
+        if (!option) return;
+        setSegmented('themeSeg', option.dataset.value);
+        applyTheme(option.dataset.value);
+        await saveUserSettings({ theme: option.dataset.value });
+    });
+
+    // --- Alert switches ---------------------------------------------------
+    ['notificationsEnabled', 'liveActivityEnabled', 'awakeAlertEnabled',
+     'napAlertEnabled', 'nightSleepAlertEnabled'].forEach((id) => {
+        document.getElementById(id).addEventListener('change', async (event) => {
+            syncDependentRows();
+            await saveUserSettings({ [id]: event.target.checked });
+        });
+    });
+
+    // --- Duration steppers ------------------------------------------------
+    document.querySelectorAll('.stepper').forEach((stepper) => {
+        stepper.addEventListener('click', async (event) => {
+            const button = event.target.closest('.stepper-btn');
+            if (!button) return;
+
+            const id = stepper.dataset.target;
+            const input = document.getElementById(id);
+            const step = Number(stepper.dataset.step) * Number(button.dataset.dir);
+            const next = Math.min(
+                Number(stepper.dataset.max),
+                Math.max(Number(stepper.dataset.min), Number(input.value) + step)
+            );
+            if (next === Number(input.value)) return;
+
+            input.value = next;
+            stepper.querySelector('.stepper-value').textContent = formatMinutes(next);
+            await saveUserSettings({ [id]: next });
+        });
     });
 
     document.getElementById('enableNotifications').addEventListener('click', async () => {
@@ -2596,106 +2783,53 @@ function initSettings() {
         updateSettingsUI();
     });
 
-    document.getElementById('testNotificationBtn').addEventListener('click', async () => {
-        const permission = await refreshNotificationPermission();
-        if (permission !== 'granted') {
-            showToast('Please enable notifications first');
-            return;
-        }
+    // --- Export -----------------------------------------------------------
+    document.getElementById('exportData').addEventListener('click', async () => {
+        const rows = [];
+        const push = (...cells) => rows.push(cells.map(csvCell).join(','));
 
-        await showSystemNotification(
-            'Baby Tracker Test Alert',
-            'Notifications are working on this device.',
-            `test-${Date.now()}`,
-            { type: 'test-alert' }
-        );
-        showToast('Test notification sent');
+        push('Type', 'Date', 'Time', 'Duration', 'Amount', 'Side', 'Notes');
+        state.feedings.forEach((f) => push(
+            f.type,
+            new Date(f.startTime).toLocaleDateString(),
+            formatTime(f.startTime),
+            f.endTime ? formatDuration(f.endTime - f.startTime) : '',
+            f.amount || '', f.side || '', f.notes || ''
+        ));
+
+        rows.push('');
+        push('Foods', 'Date', 'Time', 'Meal', 'Intake', 'Texture', 'New Food', 'Reaction', 'Reaction Notes', 'Notes');
+        state.solids.forEach((entry) => push(
+            entry.foods || '',
+            new Date(entry.startTime).toLocaleDateString(),
+            formatTime(entry.startTime),
+            formatOptionLabel(SOLID_FOOD_MEAL_TYPES, entry.mealType),
+            formatOptionLabel(SOLID_FOOD_INTAKE_LEVELS, entry.intake),
+            formatOptionLabel(SOLID_FOOD_TEXTURES, entry.texture),
+            entry.isNewFood ? 'Yes' : 'No',
+            entry.hadReaction ? 'Yes' : 'No',
+            entry.reactionNotes || '', entry.notes || ''
+        ));
+
+        rows.push('');
+        push('Sleep Type', 'Date', 'Start Time', 'End Time', 'Duration', 'Location');
+        state.sleeps.forEach((s) => push(
+            s.type,
+            new Date(s.startTime).toLocaleDateString(),
+            formatTime(s.startTime),
+            s.endTime ? formatTime(s.endTime) : '',
+            s.endTime ? formatDuration(s.endTime - s.startTime) : '',
+            s.location || ''
+        ));
+
+        await deliverCsv(`baby-tracker-${new Date().toISOString().split('T')[0]}.csv`, rows.join('\n'));
     });
 
-    document.getElementById('saveNotificationSettings').addEventListener('click', async () => {
-        const notificationsEnabled = document.getElementById('notificationsEnabled').checked;
-        const liveActivityEnabled = document.getElementById('liveActivityEnabled').checked;
-        const awakeAlertEnabled = document.getElementById('awakeAlertEnabled').checked;
-        const awakeAlertMinutes = clampMinutes(document.getElementById('awakeAlertMinutes').value, DEFAULT_SETTINGS.awakeAlertMinutes);
-        const napAlertEnabled = document.getElementById('napAlertEnabled').checked;
-        const napAlertMinutes = clampMinutes(document.getElementById('napAlertMinutes').value, DEFAULT_SETTINGS.napAlertMinutes);
-        const nightSleepAlertEnabled = document.getElementById('nightSleepAlertEnabled').checked;
-        const nightSleepAlertMinutes = clampMinutes(document.getElementById('nightSleepAlertMinutes').value, DEFAULT_SETTINGS.nightSleepAlertMinutes);
-
-        await saveUserSettings({
-            notificationsEnabled,
-            liveActivityEnabled,
-            awakeAlertEnabled,
-            awakeAlertMinutes,
-            napAlertEnabled,
-            napAlertMinutes,
-            nightSleepAlertEnabled,
-            nightSleepAlertMinutes
-        });
-
-        showToast('Notification settings saved');
-        updateSettingsUI();
-    });
-
-    const openNativeSettingsBtn = document.getElementById('openNativeSettingsBtn');
-    if (openNativeSettingsBtn) {
-        openNativeSettingsBtn.addEventListener('click', async () => {
-            const plugin = getNativeTimerLiveActivityPlugin();
-            if (!plugin) {
-                showToast('Native settings are only available on iOS app');
-                return;
-            }
-            try {
-                await plugin.openNativeSettings();
-            } catch (error) {
-                console.warn('Failed to open native settings:', error);
-                showToast('Could not open native settings');
-            }
-        });
-    }
-
-    // Export data (Client side generation from state)
-    document.getElementById('exportData').addEventListener('click', () => {
-        let csv = 'Type,Date,Time,Duration,Amount,Side,Notes\n';
-
-        state.feedings.forEach(f => {
-            const date = new Date(f.startTime).toLocaleDateString();
-            const time = formatTime(f.startTime);
-            const duration = f.endTime ? formatDuration(f.endTime - f.startTime) : '';
-            csv += `${f.type},${date},${time},${duration},${f.amount || ''},${f.side || ''},${f.notes || ''}\n`;
-        });
-
-        csv += '\nFood(s),Date,Time,Meal Type,Intake,Texture,New Food,Reaction,Reaction Notes,Notes\n';
-        state.solids.forEach((entry) => {
-            const date = new Date(entry.startTime).toLocaleDateString();
-            const time = formatTime(entry.startTime);
-            csv += `${entry.foods || ''},${date},${time},${formatOptionLabel(SOLID_FOOD_MEAL_TYPES, entry.mealType)},${formatOptionLabel(SOLID_FOOD_INTAKE_LEVELS, entry.intake)},${formatOptionLabel(SOLID_FOOD_TEXTURES, entry.texture)},${entry.isNewFood ? 'Yes' : 'No'},${entry.hadReaction ? 'Yes' : 'No'},${entry.reactionNotes || ''},${entry.notes || ''}\n`;
-        });
-
-        csv += '\nSleep Type,Date,Start Time,End Time,Duration,Location\n';
-        state.sleeps.forEach(s => {
-            const date = new Date(s.startTime).toLocaleDateString();
-            const startTime = formatTime(s.startTime);
-            const endTime = s.endTime ? formatTime(s.endTime) : '';
-            const duration = s.endTime ? formatDuration(s.endTime - s.startTime) : '';
-            csv += `${s.type},${date},${startTime},${endTime},${duration},${s.location || ''}\n`;
-        });
-
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `baby-tracker-export-${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        showToast('Data exported');
-    });
-
-    // Clear data
     document.getElementById('clearData').addEventListener('click', async () => {
         const shouldClear = await showConfirmDialog({
-            title: 'Clear All Data',
-            message: 'This permanently deletes all feeding, food, and sleep records.',
-            confirmText: 'Delete All',
+            title: 'Delete all data',
+            message: 'This permanently deletes every feeding, food and sleep record. It cannot be undone.',
+            confirmText: 'Delete everything',
             destructive: true
         });
 
@@ -2703,9 +2837,70 @@ function initSettings() {
             await clearCollection(COLLECTIONS.feedings);
             await clearCollection(COLLECTIONS.solids);
             await clearCollection(COLLECTIONS.sleeps);
-            showToast('All data cleared');
+            showToast('All data deleted');
         }
     });
+}
+
+function debounce(fn, wait) {
+    let handle = null;
+    return (...args) => {
+        clearTimeout(handle);
+        handle = setTimeout(() => fn(...args), wait);
+    };
+}
+
+// A comma or quote in a note used to shift every column after it.
+function csvCell(value) {
+    const text = String(value ?? '');
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+// Downscale in the browser so the photo fits comfortably inside the baby document
+// rather than needing a separate storage bucket.
+function downscaleImageToDataUrl(file, maxEdge) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('read-failed'));
+        reader.onload = () => {
+            const image = new Image();
+            image.onerror = () => reject(new Error('decode-failed'));
+            image.onload = () => {
+                const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.round(image.width * scale);
+                canvas.height = Math.round(image.height * scale);
+                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.82));
+            };
+            image.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// WKWebView ignores <a download>, so the native app has to hand the file to the
+// iOS share sheet instead. On the web the anchor is still the right answer.
+async function deliverCsv(filename, csv) {
+    const plugin = getNativeTimerLiveActivityPlugin();
+    if (isNativeCapacitorApp() && plugin?.shareCsv) {
+        try {
+            await plugin.shareCsv({ filename, contents: csv });
+            return;
+        } catch (error) {
+            console.warn('Native share failed:', error);
+            showToast('Could not open the share sheet');
+            return;
+        }
+    }
+
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Data exported');
 }
 
 // ===== Authentication Logic =====
@@ -2937,3 +3132,4 @@ async function init() {
 
 // Start the app
 document.addEventListener('DOMContentLoaded', init);
+

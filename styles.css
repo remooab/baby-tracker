@@ -116,7 +116,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
         color-scheme: dark;
         --bg-primary: #11162A;
         --bg-secondary: rgba(24, 30, 52, 0.94);
@@ -153,6 +153,44 @@
         --shadow-md: 0 16px 34px rgba(1, 5, 22, 0.22);
         --shadow-lg: 0 24px 48px rgba(1, 5, 22, 0.28);
     }
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg-primary: #11162A;
+    --bg-secondary: rgba(24, 30, 52, 0.94);
+    --bg-card: rgba(33, 39, 66, 0.78);
+    --text-primary: #F5F7FB;
+    --text-secondary: #D6DAE6;
+    --text-muted: #9CA5BE;
+    --accent-primary: #A6C8E9;
+    --accent-primary-light: #C9DDF2;
+    --accent-primary-dark: #6D89B0;
+    --accent-feeding: #E6B2BF;
+    --accent-feeding-light: #F2CBD4;
+    --accent-food: #D9C48B;
+    --accent-food-light: #F0E3B4;
+    --accent-food-dark: #C7A655;
+    --accent-sleep: #B8C7F0;
+    --accent-sleep-light: #D3DCF7;
+    --accent-sleep-dark: #90A5D6;
+    --accent-bottle: #B5E0D4;
+    --accent-formula: #E6D1AF;
+    --card-border: rgba(255, 255, 255, 0.12);
+    --surface-muted: rgba(255, 255, 255, 0.08);
+    --nav-active-bg: rgba(166, 200, 233, 0.16);
+    --hero-start: #171C31;
+    --hero-end: #242A49;
+    --hero-text: #F7F8FC;
+    --hero-muted: rgba(247, 248, 252, 0.78);
+    --hero-avatar-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+    --hero-avatar-ring: rgba(255, 255, 255, 0.1);
+    --home-ornament-a: rgba(112, 143, 184, 0.22);
+    --home-ornament-b: rgba(106, 176, 154, 0.14);
+    --home-ornament-c: rgba(208, 144, 170, 0.12);
+    --shadow-sm: 0 10px 22px rgba(1, 5, 22, 0.18);
+    --shadow-md: 0 16px 34px rgba(1, 5, 22, 0.22);
+    --shadow-lg: 0 24px 48px rgba(1, 5, 22, 0.28);
 }
 
 *,
@@ -1554,7 +1592,7 @@ select {
     background: var(--bg-secondary);
     border-radius: 24px;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--card-border);
     margin-bottom: 12px;
     box-shadow: var(--shadow-md);
 }
@@ -1565,7 +1603,7 @@ select {
     align-items: center;
     min-height: 62px;
     padding: 14px 18px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--card-border);
     gap: 12px;
 }
 
@@ -1593,7 +1631,7 @@ select {
 
 .ios-row-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 10px;
 }
 
@@ -2310,4 +2348,268 @@ select {
     margin-bottom: 16px;
     color: var(--text-primary);
     font-weight: 500;
+}
+/* ===== Settings ===== */
+
+/* The screen opens with the baby rather than a "Settings" title, so the profile
+   card carries the weight a header normally would. */
+.baby-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 26px;
+    padding: 28px 20px 20px;
+    padding-top: calc(28px + env(safe-area-inset-top));
+    border-radius: 28px;
+    border: 1px solid var(--card-border);
+    background: linear-gradient(160deg, var(--hero-start), var(--hero-end));
+    box-shadow: var(--shadow-md);
+    color: var(--hero-text);
+}
+
+.baby-photo {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: var(--hero-avatar-bg);
+    border: 2px solid var(--hero-avatar-ring);
+    box-shadow: var(--shadow-sm);
+    display: grid;
+    place-items: center;
+    overflow: visible;
+    flex-shrink: 0;
+}
+
+.baby-photo-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.baby-photo-initials {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: var(--accent-primary-dark);
+    letter-spacing: -0.02em;
+}
+
+.baby-photo-badge {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--accent-primary);
+    color: #fff;
+    border: 2px solid var(--bg-primary);
+    transition: transform var(--transition-fast);
+}
+
+.baby-photo-badge svg {
+    width: 16px;
+    height: 16px;
+}
+
+.baby-photo:active .baby-photo-badge {
+    transform: scale(0.9);
+}
+
+.baby-name-input {
+    width: 100%;
+    margin-top: 12px;
+    border: none;
+    background: transparent;
+    text-align: center;
+    font-family: inherit;
+    font-size: 1.6rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--hero-text);
+    padding: 2px 8px;
+    border-bottom: 2px solid transparent;
+    border-radius: 4px;
+}
+
+.baby-name-input::placeholder {
+    color: var(--hero-muted);
+    font-weight: 700;
+}
+
+.baby-name-input:focus {
+    outline: none;
+    border-bottom-color: var(--accent-primary);
+}
+
+.baby-age-line {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--hero-muted);
+    text-align: center;
+}
+
+.baby-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--card-border);
+}
+
+.baby-card-row .ios-label {
+    color: var(--hero-text);
+}
+
+.ios-inline-input {
+    width: auto;
+    border: 1px solid var(--card-border);
+    background: var(--surface-muted);
+    color: var(--hero-text);
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-size: 0.94rem;
+    font-weight: 600;
+}
+
+.baby-photo-remove {
+    margin-top: 12px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--danger);
+    background: none;
+    padding: 6px 10px;
+}
+
+/* Section headings carry a tinted dot drawn from the home screen's palette, so the
+   groups colour-code the same way the quick actions do. */
+.settings-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.settings-title::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+.settings-title[data-accent="sleep"]::before { background: var(--accent-sleep); }
+.settings-title[data-accent="feeding"]::before { background: var(--accent-feeding); }
+.settings-title[data-accent="bottle"]::before { background: var(--accent-bottle); }
+.settings-title[data-accent="food"]::before { background: var(--accent-food); }
+.settings-title[data-accent="primary"]::before { background: var(--accent-primary); }
+
+.ios-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.ios-hint {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    line-height: 1.35;
+}
+
+.ios-row-sub {
+    padding-left: 30px;
+    background: var(--surface-muted);
+}
+
+/* A control whose parent switch is off stays visible but reads as inactive,
+   rather than inviting edits that do nothing. */
+[data-depends-on].is-inactive {
+    opacity: 0.42;
+    pointer-events: none;
+}
+
+.segmented {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    border-radius: var(--radius-full);
+    background: var(--bg-primary);
+    border: 1px solid var(--card-border);
+    flex-shrink: 0;
+}
+
+.segmented-option {
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.segmented-option[aria-pressed="true"] {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+.stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--radius-full);
+    background: var(--bg-primary);
+    border: 1px solid var(--card-border);
+    flex-shrink: 0;
+}
+
+.stepper-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent-primary);
+    display: grid;
+    place-items: center;
+}
+
+.stepper-btn:active {
+    background: var(--nav-active-bg);
+}
+
+.stepper-value {
+    min-width: 62px;
+    text-align: center;
+    font-size: 0.92rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .baby-photo-badge,
+    .segmented-option {
+        transition: none;
+    }
+}
+
+.baby-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
 }

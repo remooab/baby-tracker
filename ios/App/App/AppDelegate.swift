@@ -139,60 +139,6 @@ final class BabyTimerLiveActivityManager {
 }
 #endif
 
-final class NativeSettingsViewController: UIViewController {
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .systemGroupedBackground
-        title = "Settings"
-
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .done,
-            target: self,
-            action: #selector(close)
-        )
-
-        let container = UIStackView()
-        container.axis = .vertical
-        container.spacing = 14
-        container.translatesAutoresizingMaskIntoConstraints = false
-
-        let titleLabel = UILabel()
-        titleLabel.text = "Native iOS Settings"
-        titleLabel.font = .preferredFont(forTextStyle: .title3)
-
-        let subtitleLabel = UILabel()
-        subtitleLabel.text = "This native screen is ready for final Apple-style controls."
-        subtitleLabel.font = .preferredFont(forTextStyle: .body)
-        subtitleLabel.textColor = .secondaryLabel
-        subtitleLabel.numberOfLines = 0
-
-        let openSystemSettings = UIButton(type: .system)
-        openSystemSettings.setTitle("Open iOS App Settings", for: .normal)
-        openSystemSettings.addTarget(self, action: #selector(openAppSettings), for: .touchUpInside)
-
-        container.addArrangedSubview(titleLabel)
-        container.addArrangedSubview(subtitleLabel)
-        container.addArrangedSubview(openSystemSettings)
-
-        view.addSubview(container)
-
-        NSLayoutConstraint.activate([
-            container.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
-            container.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20)
-        ])
-    }
-
-    @objc private func close() {
-        dismiss(animated: true)
-    }
-
-    @objc private func openAppSettings() {
-        guard let settingsUrl = URL(string: UIApplication.openSettingsURLString) else { return }
-        UIApplication.shared.open(settingsUrl)
-    }
-}
-
 @objc(TimerLiveActivityPlugin)
 public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "TimerLiveActivityPlugin"
@@ -200,7 +146,7 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "startOrUpdate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openNativeSettings", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "shareCsv", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPlatformCapabilities", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "fetchLiveState", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getNotificationPermission", returnType: CAPPluginReturnPromise),
@@ -252,12 +198,36 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    @objc func openNativeSettings(_ call: CAPPluginCall) {
-        DispatchQueue.main.async {
-            let viewController = NativeSettingsViewController()
-            let navController = UINavigationController(rootViewController: viewController)
-            self.bridge?.viewController?.present(navController, animated: true)
-            call.resolve(["ok": true])
+    /// WKWebView ignores `<a download>`, so an export triggered in the web layer
+    /// silently did nothing in the native app. Hand the file to the share sheet.
+    @objc func shareCsv(_ call: CAPPluginCall) {
+        let filename = call.getString("filename") ?? "baby-tracker.csv"
+        guard let contents = call.getString("contents") else {
+            call.reject("missing-contents")
+            return
+        }
+
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try contents.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            call.reject("write-failed", nil, error)
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let presenter = self?.bridge?.viewController else {
+                call.reject("no-presenter")
+                return
+            }
+
+            let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            // Required on iPad, harmless on iPhone.
+            sheet.popoverPresentationController?.sourceView = presenter.view
+            sheet.popoverPresentationController?.sourceRect = CGRect(
+                x: presenter.view.bounds.midX, y: presenter.view.bounds.maxY, width: 0, height: 0
+            )
+            presenter.present(sheet, animated: true) { call.resolve(["ok": true]) }
         }
     }
 
@@ -271,7 +241,7 @@ public class TimerLiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             "isNativeIOS": true,
             "supportsLiveActivities": supportsLiveActivities,
             "supportsNativeNotifications": true,
-            "nativeSettingsAvailable": true
+            "supportsCsvShare": true
         ])
     }
 
