@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Everything this app stores lives under users/{uid}/ — see getUserRef() in app.js.
+// There is no sharing, no public data and no admin surface, so these rules say the
+// only thing that needs saying: you reach your own subtree and nothing else.
+//
+// Deploy with:  firebase deploy --only firestore:rules --project baby-tracker-446c1
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+
+      // The user document itself is never written — the app only ever touches the
+      // subcollections below. Leaving it unmatched keeps it denied by default.
+
+      // baby/main, settings/main, and the feedings, solids and sleeps logs.
+      // Naming the collections explicitly means a typo or a future feature cannot
+      // quietly open a path nobody reviewed.
+      match /{collection}/{docId} {
+        allow read, write: if isOwner(userId)
+          && collection in ['baby', 'settings', 'feedings', 'solids', 'sleeps'];
+      }
+    }
+  }
+}
