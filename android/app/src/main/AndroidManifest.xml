@@ -24,6 +24,11 @@
 
         </activity>
 
+        <!-- Wakes up to post an alert that came due while the app was closed. -->
+        <receiver
+            android:name=".AlertAlarmReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -38,4 +43,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Runtime permission on Android 13+; ignored below that, where the only switch
+         is the one in system settings. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

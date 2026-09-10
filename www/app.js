@@ -487,7 +487,7 @@ async function requestNotificationPermission() {
                 nativeNotificationState.loaded = true;
                 const enabled = permission === 'granted';
                 await saveUserSettings({ notificationsEnabled: enabled });
-                showToast(enabled ? 'Notifications enabled' : 'Notifications denied — check iOS Settings');
+                showToast(enabled ? 'Notifications enabled' : 'Notifications denied — check your device settings');
                 return enabled;
             } catch (error) {
                 console.warn('Native notification permission request failed:', error);
@@ -539,6 +539,12 @@ async function showSystemNotification(title, body, tag, data = {}) {
                 console.warn('Native local notification failed:', error);
             }
         }
+
+        // The fallback below is unreachable from inside the native shell:
+        // registerServiceWorker() bails on native, so `serviceWorker.ready` never
+        // settles and every caller would hang on an await that cannot resolve.
+        // Dropping the alert is bad; hanging the notification engine is worse.
+        return;
     }
 
     // Web fallback
@@ -572,6 +578,10 @@ async function closeSystemNotificationsByTag(tag) {
                 console.warn('Native local notification clear failed:', error);
             }
         }
+
+        // Same trap as showSystemNotification: no service worker is ever registered
+        // on native, so `serviceWorker.ready` below would never resolve.
+        return;
     }
 
     if (!('serviceWorker' in navigator)) return;

@@ -1,0 +1,14 @@
+<!--
+    Status bar icons are drawn as a silhouette: Android keeps the alpha channel and
+    throws the colour away. So this is one closed crescent with no interior holes —
+    anything relying on fill winding would come out as a solid blob.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M128,32 A96,96 0 1 0 224,128 A72,72 0 0 1 128,32 Z" />
+</vector>
