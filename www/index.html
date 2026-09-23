@@ -402,10 +402,11 @@
                         </div>
                         <div class="ios-row ios-row-sub" data-depends-on="awakeAlertEnabled">
                             <span class="ios-label">Alert after</span>
-                            <div class="stepper" data-target="awakeAlertMinutes" data-step="15" data-min="5" data-max="720">
-                                <button type="button" class="stepper-btn" data-dir="-1" aria-label="Less time">−</button>
-                                <span class="stepper-value" data-value-for="awakeAlertMinutes">1h</span>
-                                <button type="button" class="stepper-btn" data-dir="1" aria-label="More time">+</button>
+                            <div class="duration-input" data-target="awakeAlertMinutes" data-min="5" data-max="720">
+                                <input type="number" class="duration-field" data-unit="h" inputmode="numeric" min="0" aria-label="Hours">
+                                <span class="duration-unit">h</span>
+                                <input type="number" class="duration-field" data-unit="m" inputmode="numeric" min="0" aria-label="Minutes">
+                                <span class="duration-unit">m</span>
                             </div>
                             <input type="hidden" id="awakeAlertMinutes" value="60">
                         </div>
@@ -422,10 +423,11 @@
                         </div>
                         <div class="ios-row ios-row-sub" data-depends-on="napAlertEnabled">
                             <span class="ios-label">Alert after</span>
-                            <div class="stepper" data-target="napAlertMinutes" data-step="15" data-min="5" data-max="720">
-                                <button type="button" class="stepper-btn" data-dir="-1" aria-label="Less time">−</button>
-                                <span class="stepper-value" data-value-for="napAlertMinutes">2h 20m</span>
-                                <button type="button" class="stepper-btn" data-dir="1" aria-label="More time">+</button>
+                            <div class="duration-input" data-target="napAlertMinutes" data-min="5" data-max="720">
+                                <input type="number" class="duration-field" data-unit="h" inputmode="numeric" min="0" aria-label="Hours">
+                                <span class="duration-unit">h</span>
+                                <input type="number" class="duration-field" data-unit="m" inputmode="numeric" min="0" aria-label="Minutes">
+                                <span class="duration-unit">m</span>
                             </div>
                             <input type="hidden" id="napAlertMinutes" value="140">
                         </div>
@@ -442,10 +444,11 @@
                         </div>
                         <div class="ios-row ios-row-sub" data-depends-on="nightSleepAlertEnabled">
                             <span class="ios-label">Alert after</span>
-                            <div class="stepper" data-target="nightSleepAlertMinutes" data-step="30" data-min="30" data-max="960">
-                                <button type="button" class="stepper-btn" data-dir="-1" aria-label="Less time">−</button>
-                                <span class="stepper-value" data-value-for="nightSleepAlertMinutes">4h</span>
-                                <button type="button" class="stepper-btn" data-dir="1" aria-label="More time">+</button>
+                            <div class="duration-input" data-target="nightSleepAlertMinutes" data-min="30" data-max="960">
+                                <input type="number" class="duration-field" data-unit="h" inputmode="numeric" min="0" aria-label="Hours">
+                                <span class="duration-unit">h</span>
+                                <input type="number" class="duration-field" data-unit="m" inputmode="numeric" min="0" aria-label="Minutes">
+                                <span class="duration-unit">m</span>
                             </div>
                             <input type="hidden" id="nightSleepAlertMinutes" value="240">
                         </div>

@@ -1598,6 +1598,11 @@ function formatMinutes(total) {
     return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+function setDurationFields(control, total) {
+    control.querySelector('[data-unit="h"]').value = Math.floor(total / 60);
+    control.querySelector('[data-unit="m"]').value = total % 60;
+}
+
 function applyTheme(preference) {
     const root = document.documentElement;
     if (preference === 'light' || preference === 'dark') {
@@ -1664,8 +1669,9 @@ function updateSettingsUI() {
      ['nightSleepAlertMinutes', settings.nightSleepAlertMinutes]].forEach(([id, value]) => {
         const input = document.getElementById(id);
         if (input) input.value = value;
-        const label = document.querySelector(`[data-value-for="${id}"]`);
-        if (label) label.textContent = formatMinutes(value);
+        const control = document.querySelector(`.duration-input[data-target="${id}"]`);
+        // Leave the fields alone while someone is typing in them.
+        if (control && !control.contains(document.activeElement)) setDurationFields(control, value);
     });
 
     syncDependentRows();
@@ -2896,24 +2902,30 @@ function initSettings() {
         });
     });
 
-    // --- Duration steppers ------------------------------------------------
-    document.querySelectorAll('.stepper').forEach((stepper) => {
-        stepper.addEventListener('click', async (event) => {
-            const button = event.target.closest('.stepper-btn');
-            if (!button) return;
-
-            const id = stepper.dataset.target;
+    // --- Alert durations ----------------------------------------------------
+    // Typed as hours + minutes; overflow like "0h 90m" folds into "1h 30m".
+    document.querySelectorAll('.duration-input').forEach((control) => {
+        // Commit once focus leaves the pair, so moving from hours to minutes
+        // doesn't clamp a half-typed value.
+        control.addEventListener('focusout', async (event) => {
+            if (control.contains(event.relatedTarget)) return;
+            const id = control.dataset.target;
             const input = document.getElementById(id);
-            const step = Number(stepper.dataset.step) * Number(button.dataset.dir);
+            const read = (unit) => Math.max(0, parseInt(control.querySelector(`[data-unit="${unit}"]`).value, 10) || 0);
             const next = Math.min(
-                Number(stepper.dataset.max),
-                Math.max(Number(stepper.dataset.min), Number(input.value) + step)
+                Number(control.dataset.max),
+                Math.max(Number(control.dataset.min), read('h') * 60 + read('m'))
             );
+
+            setDurationFields(control, next);
             if (next === Number(input.value)) return;
 
             input.value = next;
-            stepper.querySelector('.stepper-value').textContent = formatMinutes(next);
             await saveUserSettings({ [id]: next });
+        });
+
+        control.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') event.target.blur();
         });
     });
 
